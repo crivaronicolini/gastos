@@ -15,6 +15,7 @@ function CreateExpense() {
   const form = useForm({
     defaultValues: {
       title: "",
+      origin: "",
       amount: 0,
     },
     onSubmit: async ({ value }) => {
@@ -43,6 +44,28 @@ function CreateExpense() {
         className="w-full"
       >
         <FieldGroup>
+          <form.Field
+            name="origin"
+            children={(field) => {
+              const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+              return (
+                <Field data-invalid={isInvalid}>
+                  <FieldLabel htmlFor={field.name}>Origin</FieldLabel>
+                  <Input
+                    id={field.name}
+                    type="text"
+                    placeholder="Origin"
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    aria-invalid={isInvalid}
+                    autoComplete="off"
+                  />
+                  {isInvalid && <FieldError errors={field.state.meta.errors} />}
+                </Field>
+              );
+            }}
+          />
           <form.Field
             name="title"
             children={(field) => {

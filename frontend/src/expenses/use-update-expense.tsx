@@ -1,12 +1,11 @@
-import type { Expense } from "@shared/models";
-
+import { type Expense, type ExpenseUpdate } from "@server/db/schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 
 type UpdateExpenseInput = {
   id: number;
-  patch: Partial<Pick<Expense, "title" | "amount">>;
+  patch: ExpenseUpdate;
 };
 
 export function useUpdateExpense() {
@@ -26,7 +25,7 @@ export function useUpdateExpense() {
 
     onMutate: async ({ id, patch }) => {
       await queryClient.cancelQueries({ queryKey: ["get-all-expenses"] });
-      const previous = queryClient.getQueryData<{ expenses: Expense[] }>(["get-all-expenses"]);
+      const previous = queryClient.getQueryData<{ expenses: Expense }>(["get-all-expenses"]);
 
       queryClient.setQueryData<{ expenses: Expense[] }>(["get-all-expenses"], (old) => {
         if (!old) return old;

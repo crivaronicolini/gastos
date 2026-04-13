@@ -14,7 +14,7 @@ async function getTotalSpent() {
     throw new Error("server error");
   }
   const data = await res.json();
-  return data;
+  return { total: data.total[0]?.total ?? "0" };
 }
 
 function Index() {

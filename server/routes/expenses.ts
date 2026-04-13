@@ -1,56 +1,43 @@
 import { zValidator } from "@hono/zod-validator";
-import { createExpenseSchema, updateExpenseSchema, type Expense } from "@shared/models";
+import { db } from "@server/db";
+import { expenses, expenseInsertSchema, expenseUpdateSchema } from "@server/db/schema";
+import { sum, eq } from "drizzle-orm";
 import { Hono } from "hono";
 
-const fakeExpenses: Expense[] = [
-  { id: 1, title: "Ropa", amount: 40 },
-  { id: 2, title: "Comida", amount: 20 },
-  { id: 3, title: "Juegos", amount: 50 },
-];
-
 export const expenseRoute = new Hono()
-  .get("/", (c) => {
-    return c.json({ expenses: fakeExpenses });
+  .get("/", async (c) => {
+    const rows = await db.select().from(expenses);
+    console.log(rows);
+    return c.json({ expenses: rows });
   })
-  .get("/total-spent", (c) => {
-    const total = fakeExpenses.reduce((acc, expense) => acc + expense.amount, 0);
+  .get("/total-spent", async (c) => {
+    const total = await db.select({ total: sum(expenses.amount) }).from(expenses);
     return c.json({ total });
   })
-  .post("/", zValidator("json", createExpenseSchema), (c) => {
+  .post("/", zValidator("json", expenseInsertSchema), async (c) => {
     const expense = c.req.valid("json");
-    fakeExpenses.push({ ...expense, id: fakeExpenses.length + 1 });
+    const ret = await db.insert(expenses).values(expense).returning();
     c.status(201);
-    return c.json(expense);
+    return c.json(ret);
   })
-  .get("/:id{[0-9]+}", (c) => {
+  .get("/:id{[0-9]+}", async (c) => {
     const id = Number.parseInt(c.req.param("id"));
-    const expense = fakeExpenses.find((expense) => expense.id === id);
+    const expense = await db.select().from(expenses).where(eq(expenses.id, id));
     if (!expense) {
       return c.notFound();
     }
     return c.json({ expense });
   })
-  .patch("/:id{[0-9]+}", zValidator("json", updateExpenseSchema), (c) => {
+  .patch("/:id{[0-9]+}", zValidator("json", expenseUpdateSchema), async (c) => {
     const id = Number.parseInt(c.req.param("id"));
     const patch = c.req.valid("json");
-    const index = fakeExpenses.findIndex((expense) => expense.id === id);
-    if (index === -1) {
-      return c.notFound();
-    }
-    const expense = fakeExpenses[index];
-    if (!expense) {
-      return c.notFound();
-    }
-    const updated = { ...expense, ...patch };
-    fakeExpenses[index] = updated;
-    return c.json({ expense: updated });
+    console.log(patch);
+    const updated = await db.update(expenses).set(patch).where(eq(expenses.id, id)).returning();
+    console.log(updated);
+    return c.json(updated);
   })
-  .delete("/:id{[0-9]+}", (c) => {
+  .delete("/:id{[0-9]+}", async (c) => {
     const id = Number.parseInt(c.req.param("id"));
-    const index = fakeExpenses.findIndex((expense) => expense.id === id);
-    if (index === -1) {
-      return c.notFound();
-    }
-    const deletedExpense = fakeExpenses.splice(index, 1)[0];
-    return c.json({ expense: deletedExpense });
+    const deleted = await db.delete(expenses).where(eq(expenses.id, id)).returning();
+    return c.json(deleted);
   });

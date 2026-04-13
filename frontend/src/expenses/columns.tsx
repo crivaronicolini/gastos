@@ -15,7 +15,7 @@ declare module "@tanstack/react-table" {
   }
 }
 
-import type { Expense } from "@shared/models";
+import type { Expense } from "@server/db/schema";
 
 import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 
@@ -37,6 +37,43 @@ export const defaultColumn: Partial<ColumnDef<Expense>> = {
 
 export const columns: ColumnDef<Expense>[] = [
   {
+    accessorKey: "origin",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Origen
+          <ArrowUpDown className="ml-1 h-4 w-4" />
+        </Button>
+      );
+    },
+  },
+
+  {
+    accessorKey: "date",
+    meta: {
+      inputType: "date",
+      formatValue: (value) => {
+        if (!value) return "";
+        return new Date(value as string | number).toISOString().slice(0, 10);
+      },
+    },
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Fecha
+          <ArrowUpDown className="ml-1 h-4 w-4" />
+        </Button>
+      );
+    },
+  },
+
+  {
     accessorKey: "title",
     header: ({ column }) => {
       return (
@@ -44,12 +81,28 @@ export const columns: ColumnDef<Expense>[] = [
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
-          title
+          Nombre
           <ArrowUpDown className="ml-1 h-4 w-4" />
         </Button>
       );
     },
   },
+
+  {
+    accessorKey: "installments",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Cuotas
+          <ArrowUpDown className="ml-1 h-4 w-4" />
+        </Button>
+      );
+    },
+  },
+
   {
     accessorKey: "amount",
     header: "Amount",
@@ -67,6 +120,52 @@ export const columns: ColumnDef<Expense>[] = [
         }).format(Number(value)),
     },
   },
+
+  {
+    accessorKey: "category",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Categoría
+          <ArrowUpDown className="ml-1 h-4 w-4" />
+        </Button>
+      );
+    },
+  },
+
+  {
+    accessorKey: "usedBy",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Usó
+          <ArrowUpDown className="ml-1 h-4 w-4" />
+        </Button>
+      );
+    },
+  },
+
+  {
+    accessorKey: "paidBy",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Pagó
+          <ArrowUpDown className="ml-1 h-4 w-4" />
+        </Button>
+      );
+    },
+  },
+
   {
     id: "actions",
     meta: {

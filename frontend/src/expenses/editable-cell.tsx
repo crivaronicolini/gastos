@@ -1,4 +1,4 @@
-import type { Expense } from "@shared/models";
+import type { Expense } from "@server/db/schema";
 import type { CellContext } from "@tanstack/react-table";
 
 import React from "react";
@@ -10,7 +10,10 @@ export function EditableCell({ getValue, row, column, table }: CellContext<Expen
 
   const formatValue = column.columnDef.meta?.formatValue;
 
-  const inputValue = !isEditing && formatValue ? formatValue(value) : String(value ?? "");
+  const isDateInput = column.columnDef.meta?.inputType === "date";
+
+  const inputValue =
+    formatValue && (!isEditing || isDateInput) ? formatValue(value) : String(value ?? "");
 
   const onBlur = () => {
     setIsEditing(false);

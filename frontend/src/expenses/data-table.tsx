@@ -23,7 +23,7 @@ interface DataTableProps {
   onUpdateData: (expenseId: number, columnId: string, value: unknown) => void;
 }
 
-import type { Expense } from "@shared/models";
+import type { Expense } from "@server/db/schema";
 
 import { defaultColumn } from "./columns.tsx";
 
