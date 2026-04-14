@@ -12,10 +12,11 @@ declare module "@tanstack/react-table" {
   }
   interface TableMeta<TData extends RowData> {
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
+    categories: Category[];
   }
 }
 
-import type { Expense } from "@server/db/schema";
+import type { Category, Expense } from "@server/db/schema";
 
 import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 
@@ -29,6 +30,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu.tsx";
+import { CategoryCell } from "./category-cell.tsx";
 import { EditableCell } from "./editable-cell.tsx";
 
 export const defaultColumn: Partial<ColumnDef<Expense>> = {
@@ -123,6 +125,7 @@ export const columns: ColumnDef<Expense>[] = [
 
   {
     accessorKey: "category",
+    cell: CategoryCell,
     header: ({ column }) => {
       return (
         <Button

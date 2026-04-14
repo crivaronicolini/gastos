@@ -25,7 +25,7 @@ export function useUpdateExpense() {
 
     onMutate: async ({ id, patch }) => {
       await queryClient.cancelQueries({ queryKey: ["get-all-expenses"] });
-      const previous = queryClient.getQueryData<{ expenses: Expense }>(["get-all-expenses"]);
+      const previous = queryClient.getQueryData<{ expenses: Expense[] }>(["get-all-expenses"]);
 
       queryClient.setQueryData<{ expenses: Expense[] }>(["get-all-expenses"], (old) => {
         if (!old) return old;

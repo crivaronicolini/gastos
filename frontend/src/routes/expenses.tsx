@@ -10,6 +10,15 @@ export const Route = createFileRoute("/expenses")({
   component: Expenses,
 });
 
+async function getAllCategroies() {
+  const res = await api.categories.$get();
+  if (!res.ok) {
+    throw new Error("server error");
+  }
+  const data = await res.json();
+  return data;
+}
+
 async function getAllExpenses() {
   const res = await api.expenses.$get();
   if (!res.ok) {
@@ -20,6 +29,12 @@ async function getAllExpenses() {
 }
 
 function Expenses() {
+  const categoriesQuery = useQuery({
+    queryKey: ["get-all-categories"],
+    queryFn: getAllCategroies,
+    staleTime: 1000 * 60,
+  });
+
   const { error, data } = useQuery({
     queryKey: ["get-all-expenses"],
     queryFn: getAllExpenses,
@@ -35,11 +50,19 @@ function Expenses() {
       <DataTable
         columns={columns}
         data={data?.expenses ?? []}
+        categories={categoriesQuery.data?.categories ?? []}
         onUpdateData={(expenseId, columnId, value) => {
           updateExpense.mutate({
             id: expenseId,
             patch: {
-              [columnId]: columnId === "amount" ? Number(value) : value,
+              [columnId]:
+                columnId === "amount"
+                  ? Number(value)
+                  : columnId === "category"
+                    ? value == null
+                      ? null
+                      : Number(value)
+                    : value,
             },
           });
         }}

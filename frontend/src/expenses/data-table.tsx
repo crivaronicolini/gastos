@@ -20,23 +20,19 @@ import {
 interface DataTableProps {
   columns: ColumnDef<Expense>[];
   data: Expense[];
+  categories: Category[];
   onUpdateData: (expenseId: number, columnId: string, value: unknown) => void;
 }
 
-import type { Expense } from "@server/db/schema";
+import type { Category, Expense } from "@server/db/schema";
 
 import { defaultColumn } from "./columns.tsx";
 
-export function DataTable({ columns, data, onUpdateData }: DataTableProps) {
+export function DataTable({ columns, data, categories, onUpdateData }: DataTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [tableData, setTableData] = React.useState(data);
-
-  React.useEffect(() => {
-    setTableData(data);
-  }, [data]);
 
   const table = useReactTable({
-    data: tableData,
+    data,
     columns,
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
@@ -47,6 +43,7 @@ export function DataTable({ columns, data, onUpdateData }: DataTableProps) {
     },
     meta: {
       updateData: onUpdateData,
+      categories,
     },
   });
 
