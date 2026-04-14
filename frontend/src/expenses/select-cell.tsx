@@ -1,11 +1,17 @@
 import type { Expense } from "@server/db/schema";
 import type { CellContext } from "@tanstack/react-table";
+
 import * as React from "react";
 
-export function CategoryCell({ getValue, row, column, table }: CellContext<Expense, unknown>) {
+export type SelectCellOption = {
+  id: string | number;
+  name: string;
+};
+
+export function SelectCell({ getValue, row, column, table }: CellContext<Expense, unknown>) {
   const value = getValue();
   const [selectedValue, setSelectedValue] = React.useState(value == null ? "" : String(value));
-  const categories = table.options.meta?.categories ?? [];
+  const options = table.options.meta?.selectOptions?.[column.id] ?? [];
 
   React.useEffect(() => {
     setSelectedValue(value == null ? "" : String(value));
@@ -20,11 +26,11 @@ export function CategoryCell({ getValue, row, column, table }: CellContext<Expen
         table.options.meta?.updateData(row.original.id, column.id, nextValue);
       }}
     >
-      <option value="">No category</option>
+      <option value="">None</option>
 
-      {categories.map((category) => (
-        <option key={category.id} value={category.id}>
-          {category.name}
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.name}
         </option>
       ))}
     </select>

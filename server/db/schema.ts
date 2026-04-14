@@ -8,6 +8,11 @@ export const categories = sqliteTable("categories", {
   name: text().notNull().unique(),
 });
 
+export const users = sqliteTable("users", {
+  id: int().primaryKey({ autoIncrement: true }),
+  name: text().notNull().unique(),
+});
+
 export const expenses = sqliteTable("expenses", {
   id: int().primaryKey({ autoIncrement: true }),
   origin: text().notNull(),
@@ -16,8 +21,8 @@ export const expenses = sqliteTable("expenses", {
   date: integer({ mode: "timestamp" }),
   installments: text(),
   category: int().references(() => categories.id),
-  usedBy: text(),
-  paidBy: text(),
+  usedBy: int().references(() => users.id),
+  paidBy: int().references(() => users.id),
 });
 
 export const expenseSelectSchema = createSelectSchema(expenses);
@@ -40,15 +45,37 @@ export type Category = z.infer<typeof categorySelectSchema>;
 export type CategoryInsert = z.infer<typeof categoryInsertSchema>;
 export type CategoryUpdate = z.infer<typeof categoryUpdateSchema>;
 
-export const relations = defineRelations({ expenses, categories }, (r) => ({
+export const UserSelectSchema = createSelectSchema(users);
+export const UserInsertSchema = createInsertSchema(users);
+export const UserUpdateSchema = createUpdateSchema(users);
+
+export type User = z.infer<typeof UserSelectSchema>;
+export type UserInsert = z.infer<typeof UserInsertSchema>;
+export type UserUpdate = z.infer<typeof UserUpdateSchema>;
+
+export const relations = defineRelations({ expenses, categories, users }, (r) => ({
   expenses: {
     categories: r.one.categories({
       from: r.expenses.category,
       to: r.categories.id,
     }),
+    usedByUser: r.one.users({
+      from: r.expenses.usedBy,
+      to: r.users.id,
+      alias: "used",
+    }),
+    paidByUser: r.one.users({
+      from: r.expenses.paidBy,
+      to: r.users.id,
+      alias: "paid",
+    }),
   },
 
   categories: {
     expenses: r.many.expenses(),
+  },
+  users: {
+    usedExpenses: r.many.expenses({ alias: "used" }),
+    paidExpenses: r.many.expenses({ alias: "paid" }),
   },
 }));

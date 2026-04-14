@@ -1,5 +1,7 @@
 import { db } from ".";
-import { categories, expenses } from "./schema";
+import { categories, expenses, users } from "./schema";
+
+await db.insert(users).values([{ name: "Ingrid" }, { name: "Marco" }, { name: "Casa" }]);
 
 await db
   .insert(categories)

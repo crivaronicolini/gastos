@@ -12,15 +12,17 @@ declare module "@tanstack/react-table" {
   }
   interface TableMeta<TData extends RowData> {
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
-    categories: Category[];
+    selectOptions: Record<string, SelectCellOption[]>;
   }
 }
 
-import type { Category, Expense } from "@server/db/schema";
+import type { Expense } from "@server/db/schema";
 
 import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+
+import type { SelectCellOption } from "./category-cell.tsx";
 
 import {
   DropdownMenu,
@@ -30,8 +32,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu.tsx";
-import { CategoryCell } from "./category-cell.tsx";
 import { EditableCell } from "./editable-cell.tsx";
+import { SelectCell } from "./select-cell.tsx";
 
 export const defaultColumn: Partial<ColumnDef<Expense>> = {
   cell: EditableCell,
@@ -125,7 +127,7 @@ export const columns: ColumnDef<Expense>[] = [
 
   {
     accessorKey: "category",
-    cell: CategoryCell,
+    cell: SelectCell,
     header: ({ column }) => {
       return (
         <Button
@@ -141,6 +143,7 @@ export const columns: ColumnDef<Expense>[] = [
 
   {
     accessorKey: "usedBy",
+    cell: SelectCell,
     header: ({ column }) => {
       return (
         <Button
@@ -156,6 +159,7 @@ export const columns: ColumnDef<Expense>[] = [
 
   {
     accessorKey: "paidBy",
+    cell: SelectCell,
     header: ({ column }) => {
       return (
         <Button

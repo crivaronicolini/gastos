@@ -20,15 +20,16 @@ import {
 interface DataTableProps {
   columns: ColumnDef<Expense>[];
   data: Expense[];
-  categories: Category[];
+  selectOptions: Record<string, SelectCellOption[]>;
   onUpdateData: (expenseId: number, columnId: string, value: unknown) => void;
 }
 
-import type { Category, Expense } from "@server/db/schema";
+import type { Expense } from "@server/db/schema";
+import type { SelectCellOption } from "./category-cell.tsx";
 
 import { defaultColumn } from "./columns.tsx";
 
-export function DataTable({ columns, data, categories, onUpdateData }: DataTableProps) {
+export function DataTable({ columns, data, selectOptions, onUpdateData }: DataTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
   const table = useReactTable({
@@ -43,7 +44,7 @@ export function DataTable({ columns, data, categories, onUpdateData }: DataTable
     },
     meta: {
       updateData: onUpdateData,
-      categories,
+      selectOptions,
     },
   });
 

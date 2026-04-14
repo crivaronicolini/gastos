@@ -19,6 +19,15 @@ async function getAllCategroies() {
   return data;
 }
 
+async function getAllUsers() {
+  const res = await api.users.$get();
+  if (!res.ok) {
+    throw new Error("server error");
+  }
+  const data = await res.json();
+  return data;
+}
+
 async function getAllExpenses() {
   const res = await api.expenses.$get();
   if (!res.ok) {
@@ -32,6 +41,12 @@ function Expenses() {
   const categoriesQuery = useQuery({
     queryKey: ["get-all-categories"],
     queryFn: getAllCategroies,
+    staleTime: 1000 * 60,
+  });
+
+  const usersQuery = useQuery({
+    queryKey: ["get-all-users"],
+    queryFn: getAllUsers,
     staleTime: 1000 * 60,
   });
 
@@ -50,7 +65,11 @@ function Expenses() {
       <DataTable
         columns={columns}
         data={data?.expenses ?? []}
-        categories={categoriesQuery.data?.categories ?? []}
+        selectOptions={{
+          category: categoriesQuery.data?.categories ?? [],
+          usedBy: usersQuery.data?.users ?? [],
+          paidBy: usersQuery.data?.users ?? [],
+        }}
         onUpdateData={(expenseId, columnId, value) => {
           updateExpense.mutate({
             id: expenseId,
@@ -58,7 +77,7 @@ function Expenses() {
               [columnId]:
                 columnId === "amount"
                   ? Number(value)
-                  : columnId === "category"
+                  : columnId === "category" || columnId === "usedBy" || columnId === "paidBy"
                     ? value == null
                       ? null
                       : Number(value)

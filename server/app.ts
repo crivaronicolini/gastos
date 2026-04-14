@@ -4,6 +4,7 @@ import { logger } from "hono/logger";
 
 import { categoriesRoute } from "./routes/categories.ts";
 import { expenseRoute } from "./routes/expenses.ts";
+import { usersRoute } from "./routes/users.ts";
 
 const app = new Hono();
 
@@ -12,7 +13,8 @@ app.use("*", logger());
 const apiRoutes = app
   .basePath("/api")
   .route("/expenses", expenseRoute)
-  .route("/categories", categoriesRoute);
+  .route("/categories", categoriesRoute)
+  .route("/users", usersRoute);
 
 app.use("*", serveStatic({ root: "./frontend/dist" }));
 app.get("*", serveStatic({ path: "./sfrontend/dist/index.html" }));
