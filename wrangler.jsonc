@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "gastos",
+  "main": "server/index.ts",
+  "compatibility_date": "2026-04-15",
+  "workers_dev": false,
+  "assets": {
+    "directory": "./frontend/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "<BINDING_NAME>",
+      "database_id": "2af02b8f-c1d5-4c11-97ef-78daab8d818d",
+      "migrations_dir": "migrations",
+    },
+  ],
+}

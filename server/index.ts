@@ -1,7 +1,5 @@
 import app from "./app";
 
-Bun.serve({
+export default {
   fetch: app.fetch,
-});
-
-console.log("server runnign");
+};

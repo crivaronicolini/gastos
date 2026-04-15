@@ -22,7 +22,7 @@ import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-import type { SelectCellOption } from "./category-cell.tsx";
+import type { SelectCellOption } from "./select-cell.tsx";
 
 import {
   DropdownMenu,

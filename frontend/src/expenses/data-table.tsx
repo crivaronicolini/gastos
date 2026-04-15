@@ -25,7 +25,8 @@ interface DataTableProps {
 }
 
 import type { Expense } from "@server/db/schema";
-import type { SelectCellOption } from "./category-cell.tsx";
+
+import type { SelectCellOption } from "./select-cell.tsx";
 
 import { defaultColumn } from "./columns.tsx";
 

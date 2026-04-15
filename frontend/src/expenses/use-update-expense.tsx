@@ -1,4 +1,5 @@
-import { type Expense, type ExpenseUpdate } from "@server/db/schema";
+import type { Expense, ExpenseUpdate } from "@server/db/schema";
+
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";

@@ -1,5 +1,18 @@
-import { drizzle } from "drizzle-orm/bun-sqlite";
+import { drizzle } from "drizzle-orm/d1";
 
-import { relations } from "./schema";
+import { categories, expenses, relations, users } from "./schema";
 
-export const db = drizzle(Bun.env.DB_FILE_NAME!, { relations });
+const schema = {
+  categories,
+  expenses,
+  users,
+};
+
+export function createDb(d1: D1Database) {
+  return drizzle(d1, {
+    schema,
+    relations,
+  });
+}
+
+export type Db = ReturnType<typeof createDb>;

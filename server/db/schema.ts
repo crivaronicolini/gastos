@@ -55,7 +55,7 @@ export type UserUpdate = z.infer<typeof UserUpdateSchema>;
 
 export const relations = defineRelations({ expenses, categories, users }, (r) => ({
   expenses: {
-    categories: r.one.categories({
+    categoryData: r.one.categories({
       from: r.expenses.category,
       to: r.categories.id,
     }),
@@ -72,10 +72,21 @@ export const relations = defineRelations({ expenses, categories, users }, (r) =>
   },
 
   categories: {
-    expenses: r.many.expenses(),
+    expenses: r.many.expenses({
+      from: r.categories.id,
+      to: r.expenses.category,
+    }),
   },
   users: {
-    usedExpenses: r.many.expenses({ alias: "used" }),
-    paidExpenses: r.many.expenses({ alias: "paid" }),
+    usedExpenses: r.many.expenses({
+      from: r.users.id,
+      to: r.expenses.usedBy,
+      alias: "used",
+    }),
+    paidExpenses: r.many.expenses({
+      from: r.users.id,
+      to: r.expenses.paidBy,
+      alias: "paid",
+    }),
   },
 }));
