@@ -18,4 +18,21 @@
       "migrations_dir": "migrations",
     },
   ],
+  "workflows": [
+    {
+      "name": "process-files",
+      "binding": "process_files_WF",
+      "class_name": "ProcessFilesWorkflow",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "bucket_name": "gastos",
+      "binding": "R2",
+    },
+  ],
+  "ai": {
+    "binding": "AI",
+  },
 }
+
