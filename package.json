@@ -5,7 +5,9 @@
   "module": "index.ts",
   "scripts": {
     "start": "bun server/index.ts",
-    "dev": "bun --watch server/index.ts"
+    "dev": "bun run --cwd frontend dev",
+    "build": "bun run --cwd frontend build",
+    "deploy": "bun run --cwd frontend deploy"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.6",

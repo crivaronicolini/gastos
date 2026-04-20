@@ -1,10 +1,11 @@
 import { drizzle } from "drizzle-orm/d1";
 
-import { categories, expenses, relations, users } from "./schema";
+import { categories, expenses, relations, statements, users } from "./schema";
 
 const schema = {
   categories,
   expenses,
+  statements,
   users,
 };
 

@@ -158,22 +158,6 @@ export const columns: ColumnDef<Expense>[] = [
   },
 
   {
-    accessorKey: "paidBy",
-    cell: SelectCell,
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Pagó
-          <ArrowUpDown className="ml-1 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-
-  {
     id: "actions",
     meta: {
       headerClassName: "w-8",

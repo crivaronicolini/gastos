@@ -1,35 +1,171 @@
 import type { AppEnv } from "@server/app";
 
+import {
+  categories,
+  expenses,
+  statementImportSchema,
+  statements,
+  uploadWebhookSchema,
+  users,
+} from "@server/db/schema";
+import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 
-export const pdfCompleteRoute = new Hono<AppEnv>().post("/webhook", (c) => {
-  const res = c.req.raw;
-  console.log(res);
-  return new Response("File uploaded successfully", { status: 200 });
-});
+function parseStatementDate(value: string | null): Date | null {
+  if (!value) return null;
 
-export const uploadRoute = new Hono<AppEnv>().post("/", async (c) => {
-  const body = await c.req.parseBody({ all: true });
-  const value = body["file"];
-
-  const files = Array.isArray(value)
-    ? value.filter((item): item is File => item instanceof File)
-    : value instanceof File
-      ? [value]
-      : [];
-
-  if (files.length === 0) {
-    return c.text("At least one file is required", 400);
+  const trimmed = value.trim();
+  const iso = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) {
+    return new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
   }
 
-  const instances = await Promise.all(
-    files.map(async (file) => {
-      const id = crypto.randomUUID();
-      const upload = await c.env.R2.put(id.slice(0, 5) + "-" + file.name, file);
-      return { id, params: { file_url: upload?.key } };
-    }),
-  );
+  const short = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (!short) return null;
 
-  await c.env.process_files_WF.createBatch(instances);
-  return new Response("File uploaded successfully", { status: 200 });
-});
+  const day = Number(short[1]);
+  const month = Number(short[2]);
+  const rawYear = Number(short[3]);
+  const year = rawYear < 100 ? 2000 + rawYear : rawYear;
+
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+async function findCategoryId(db: AppEnv["Variables"]["db"], name: string) {
+  const [existing] = await db.select().from(categories).where(eq(categories.name, name));
+  if (existing) return existing.id;
+
+  throw new Error(`Unknown category: ${name}`);
+}
+
+async function findUserId(db: AppEnv["Variables"]["db"], id: number) {
+  const [existing] = await db.select().from(users).where(eq(users.id, id));
+  if (existing) return existing.id;
+
+  throw new Error(`Unknown user id: ${id}`);
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+export const uploadRoute = new Hono<AppEnv>()
+  .post("/webhook", async (c) => {
+    const body = uploadWebhookSchema.safeParse(await c.req.json());
+    if (!body.success) {
+      return c.json({ error: "Invalid webhook payload", issues: body.error.issues }, 400);
+    }
+
+    const { file_key, json_key, owner_id } = body.data;
+    try {
+      const db = c.get("db");
+      const jsonObject = await c.env.R2.get(json_key);
+      if (!jsonObject) {
+        return c.json({ error: `JSON output not found: ${json_key}` }, 404);
+      }
+
+      const payload = statementImportSchema.safeParse(JSON.parse(await jsonObject.text()));
+      if (!payload.success) {
+        return c.json({ error: "Invalid statement JSON", issues: payload.error.issues }, 422);
+      }
+
+      const statementImport = payload.data;
+      const ownerId = await findUserId(db, owner_id);
+
+      const [statement] = await db
+        .insert(statements)
+        .values({
+          bank: statementImport.bank,
+          card: statementImport.card,
+          jsonFileKey: json_key,
+          month: statementImport.month,
+          owner: ownerId,
+          periodFrom: parseStatementDate(statementImport.period_from),
+          periodTo: parseStatementDate(statementImport.period_to),
+          sourceFileKey: file_key,
+        })
+        .returning();
+      if (!statement) {
+        throw new Error("Failed to create statement");
+      }
+
+      const expenseRows = await Promise.all(
+        statementImport.expenses.map(async (expense) => ({
+          amount: expense.amount ?? expense.amount_usd,
+          category: await findCategoryId(db, expense.category),
+          date: parseStatementDate(expense.date),
+          installments: expense.installments,
+          origin: statementImport.card ?? statementImport.bank ?? "unknown",
+          statement: statement.id,
+          title: expense.title ?? "Unknown expense",
+          usedBy: ownerId,
+        })),
+      );
+
+      const insertedExpenses = [];
+      for (const expenseChunk of chunkArray(expenseRows, 10)) {
+        insertedExpenses.push(...(await db.insert(expenses).values(expenseChunk).returning()));
+      }
+
+      return c.json({
+        expenses: insertedExpenses,
+        statement,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Upload webhook failed", { error, file_key, json_key });
+      if (message.startsWith("Unknown category:") || message.startsWith("Unknown user id:")) {
+        return c.json({ error: "Invalid statement JSON", message, file_key, json_key }, 422);
+      }
+      return c.json({ error: "Upload webhook failed", message, file_key, json_key }, 500);
+    }
+  })
+  .post("/", async (c) => {
+    const body = await c.req.parseBody({ all: true });
+    const value = body["file"] ?? body["files"];
+    const ownerId = Number(body["owner_id"]);
+
+    const files = Array.isArray(value)
+      ? value.filter((item): item is File => item instanceof File)
+      : value instanceof File
+        ? [value]
+        : [];
+
+    if (files.length === 0) {
+      return c.json(
+        {
+          error: "At least one file is required",
+          fields: Object.keys(body),
+        },
+        400,
+      );
+    }
+    if (!Number.isInteger(ownerId) || ownerId <= 0) {
+      return c.json({ error: "A valid owner_id is required" }, 400);
+    }
+
+    const db = c.get("db");
+    await findUserId(db, ownerId);
+
+    const callbackUrl = new URL("/api/upload/webhook", c.req.url).toString();
+    const instances = await Promise.all(
+      files.map(async (file) => {
+        const id = crypto.randomUUID();
+        const upload = await c.env.R2.put(id.slice(0, 5) + "-" + file.name, file);
+        if (!upload) {
+          throw new Error(`Failed to upload file: ${file.name}`);
+        }
+        return {
+          id,
+          params: { callback_url: callbackUrl, file_url: upload.key, owner_id: ownerId },
+        };
+      }),
+    );
+
+    await c.env.process_files_WF.createBatch(instances);
+    return new Response("File uploaded successfully", { status: 200 });
+  });

@@ -1,4 +1,5 @@
 import babel from "@rolldown/plugin-babel";
+import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
@@ -14,16 +15,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
     babel({ presets: [reactCompilerPreset()] }),
+    cloudflare({
+      configPath: "../wrangler.jsonc",
+      persistState: { path: "../.wrangler/state" },
+    }),
   ],
   resolve: {
     tsconfigPaths: true,
-  },
-  server: {
-    proxy: {
-      "/api": {
-        target: "http://localhost:3000",
-        changeOrigin: true,
-      },
-    },
   },
 });
