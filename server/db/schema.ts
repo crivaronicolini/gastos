@@ -13,8 +13,32 @@ export const users = sqliteTable("users", {
   name: text().notNull().unique(),
 });
 
+export const groups = sqliteTable("groups", {
+  id: int().primaryKey({ autoIncrement: true }),
+  name: text().notNull(),
+  createdAt: integer({ mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+});
+
+export const groupMembers = sqliteTable("group_members", {
+  id: int().primaryKey({ autoIncrement: true }),
+  group: int("groupId").references(() => groups.id),
+  user: int("userId").references(() => users.id),
+  role: text().notNull().default("member"),
+  createdAt: integer({ mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+});
+
+export const usageTargets = sqliteTable("usage_targets", {
+  id: int().primaryKey({ autoIncrement: true }),
+  group: int("groupId").references(() => groups.id),
+  name: text().notNull(),
+  type: text().notNull(),
+  user: int("userId").references(() => users.id),
+  createdAt: integer({ mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+});
+
 export const statements = sqliteTable("statements", {
   id: int().primaryKey({ autoIncrement: true }),
+  group: int("groupId").references(() => groups.id),
   bank: text(),
   card: text(),
   owner: int().references(() => users.id),
@@ -35,7 +59,7 @@ export const expenses = sqliteTable("expenses", {
   date: integer({ mode: "timestamp" }),
   installments: text(),
   category: int().references(() => categories.id),
-  usedBy: int().references(() => users.id),
+  usedByTarget: int().references(() => usageTargets.id),
 });
 
 export const expenseSelectSchema = createSelectSchema(expenses);
@@ -65,6 +89,48 @@ export const UserUpdateSchema = createUpdateSchema(users);
 export type User = z.infer<typeof UserSelectSchema>;
 export type UserInsert = z.infer<typeof UserInsertSchema>;
 export type UserUpdate = z.infer<typeof UserUpdateSchema>;
+
+export const groupSelectSchema = createSelectSchema(groups);
+export const groupInsertSchema = createInsertSchema(groups, {
+  createdAt: z.coerce.date().optional(),
+});
+export const groupUpdateSchema = createUpdateSchema(groups, {
+  createdAt: z.coerce.date().optional(),
+});
+
+export type Group = z.infer<typeof groupSelectSchema>;
+export type GroupInsert = z.infer<typeof groupInsertSchema>;
+export type GroupUpdate = z.infer<typeof groupUpdateSchema>;
+
+export const groupMemberSelectSchema = createSelectSchema(groupMembers);
+export const groupMemberInsertSchema = createInsertSchema(groupMembers, {
+  createdAt: z.coerce.date().optional(),
+});
+export const groupMemberUpdateSchema = createUpdateSchema(groupMembers, {
+  createdAt: z.coerce.date().optional(),
+});
+
+export type GroupMember = z.infer<typeof groupMemberSelectSchema>;
+export type GroupMemberInsert = z.infer<typeof groupMemberInsertSchema>;
+export type GroupMemberUpdate = z.infer<typeof groupMemberUpdateSchema>;
+
+export const usageTargetTypes = ["member", "group"] as const;
+
+export const usageTargetSelectSchema = createSelectSchema(usageTargets, {
+  type: z.enum(usageTargetTypes),
+});
+export const usageTargetInsertSchema = createInsertSchema(usageTargets, {
+  createdAt: z.coerce.date().optional(),
+  type: z.enum(usageTargetTypes),
+});
+export const usageTargetUpdateSchema = createUpdateSchema(usageTargets, {
+  createdAt: z.coerce.date().optional(),
+  type: z.enum(usageTargetTypes).optional(),
+});
+
+export type UsageTarget = z.infer<typeof usageTargetSelectSchema>;
+export type UsageTargetInsert = z.infer<typeof usageTargetInsertSchema>;
+export type UsageTargetUpdate = z.infer<typeof usageTargetUpdateSchema>;
 
 export const statementSelectSchema = createSelectSchema(statements);
 export const statementInsertSchema = createInsertSchema(statements, {
@@ -128,6 +194,7 @@ export const statementImportSchema = z
 export const uploadWebhookSchema = z
   .object({
     file_key: z.string().min(1),
+    group_id: z.number().int().positive(),
     json_key: z.string().min(1),
     owner_id: z.number().int().positive(),
   })
@@ -143,7 +210,9 @@ export const statementImportJsonSchema = {
   schema: toJSONSchema(statementImportSchema, { target: "draft-7" }),
 } as const;
 
-export const relations = defineRelations({ expenses, categories, users, statements }, (r) => ({
+export const relations = defineRelations(
+  { expenses, categories, users, groups, groupMembers, statements, usageTargets },
+  (r) => ({
   expenses: {
     statementData: r.one.statements({
       from: r.expenses.statement,
@@ -153,10 +222,9 @@ export const relations = defineRelations({ expenses, categories, users, statemen
       from: r.expenses.category,
       to: r.categories.id,
     }),
-    usedByUser: r.one.users({
-      from: r.expenses.usedBy,
-      to: r.users.id,
-      alias: "used",
+    usedByTargetData: r.one.usageTargets({
+      from: r.expenses.usedByTarget,
+      to: r.usageTargets.id,
     }),
   },
 
@@ -167,17 +235,48 @@ export const relations = defineRelations({ expenses, categories, users, statemen
     }),
   },
   users: {
+    groupMemberships: r.many.groupMembers({
+      from: r.users.id,
+      to: r.groupMembers.user,
+    }),
     statements: r.many.statements({
       from: r.users.id,
       to: r.statements.owner,
     }),
-    usedExpenses: r.many.expenses({
+    usageTargets: r.many.usageTargets({
       from: r.users.id,
-      to: r.expenses.usedBy,
-      alias: "used",
+      to: r.usageTargets.user,
+    }),
+  },
+  groups: {
+    members: r.many.groupMembers({
+      from: r.groups.id,
+      to: r.groupMembers.group,
+    }),
+    statements: r.many.statements({
+      from: r.groups.id,
+      to: r.statements.group,
+    }),
+    usageTargets: r.many.usageTargets({
+      from: r.groups.id,
+      to: r.usageTargets.group,
+    }),
+  },
+  groupMembers: {
+    groupData: r.one.groups({
+      from: r.groupMembers.group,
+      to: r.groups.id,
+    }),
+    userData: r.one.users({
+      from: r.groupMembers.user,
+      to: r.users.id,
     }),
   },
   statements: {
+    groupData: r.one.groups({
+      from: r.statements.group,
+      to: r.groups.id,
+    }),
     ownerUser: r.one.users({
       from: r.statements.owner,
       to: r.users.id,
@@ -185,6 +284,20 @@ export const relations = defineRelations({ expenses, categories, users, statemen
     expenses: r.many.expenses({
       from: r.statements.id,
       to: r.expenses.statement,
+    }),
+  },
+  usageTargets: {
+    groupData: r.one.groups({
+      from: r.usageTargets.group,
+      to: r.groups.id,
+    }),
+    userData: r.one.users({
+      from: r.usageTargets.user,
+      to: r.users.id,
+    }),
+    expenses: r.many.expenses({
+      from: r.usageTargets.id,
+      to: r.expenses.usedByTarget,
     }),
   },
 }));

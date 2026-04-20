@@ -4,6 +4,7 @@ import { logger } from "hono/logger";
 import { createDb, type Db } from "./db";
 import { categoriesRoute } from "./routes/categories.ts";
 import { expenseRoute } from "./routes/expenses.ts";
+import { groupsRoute } from "./routes/groups.ts";
 import { uploadRoute } from "./routes/upload.ts";
 import { usersRoute } from "./routes/users.ts";
 
@@ -39,6 +40,7 @@ const apiRoutes = app
   .basePath("/api")
   .route("/expenses", expenseRoute)
   .route("/categories", categoriesRoute)
+  .route("/groups", groupsRoute)
   .route("/users", usersRoute)
   .route("/upload", uploadRoute);
 

@@ -142,7 +142,7 @@ export const columns: ColumnDef<Expense>[] = [
   },
 
   {
-    accessorKey: "usedBy",
+    accessorKey: "usedByTarget",
     cell: SelectCell,
     header: ({ column }) => {
       return (

@@ -20,8 +20,8 @@ async function getAllCategroies() {
   return data;
 }
 
-async function getAllUsers() {
-  const res = await api.users.$get();
+async function getAllGroups() {
+  const res = await api.groups.$get();
   if (!res.ok) {
     throw new Error("server error");
   }
@@ -39,9 +39,9 @@ async function getAllExpenses() {
 }
 
 function Expenses() {
-  const [isDragging, setIsDragging] = React.useState(false);
+  const [draggingOwnerId, setDraggingOwnerId] = React.useState<number | null>(null);
+  const [groupId, setGroupId] = React.useState<number | null>(null);
   const [uploadStatus, setUploadStatus] = React.useState<string | null>(null);
-  const [ownerId, setOwnerId] = React.useState<number | null>(null);
 
   const categoriesQuery = useQuery({
     queryKey: ["get-all-categories"],
@@ -49,9 +49,9 @@ function Expenses() {
     staleTime: 1000 * 60,
   });
 
-  const usersQuery = useQuery({
-    queryKey: ["get-all-users"],
-    queryFn: getAllUsers,
+  const groupsQuery = useQuery({
+    queryKey: ["get-all-groups"],
+    queryFn: getAllGroups,
     staleTime: 1000 * 60,
   });
 
@@ -62,20 +62,38 @@ function Expenses() {
   });
 
   const updateExpense = useUpdateExpense();
+  const groups = groupsQuery.data?.groups ?? [];
+  const currentGroup = groups.find((group) => group.id === groupId) ?? groups[0];
+  const statementOwners = currentGroup?.members.map((member) => member.user) ?? [];
+  const usageTargets = currentGroup?.usageTargets ?? [];
+  const expenses = (data?.expenses ?? []).map((expense) => ({
+    ...expense,
+    date: expense.date ? new Date(expense.date) : null,
+  }));
+  const memberTables = statementOwners.map((user) => {
+    const usageTarget = usageTargets.find((target) => target.user === user.id);
+    return {
+      user,
+      usageTarget,
+      expenses: usageTarget
+        ? expenses.filter((expense) => expense.usedByTarget === usageTarget.id)
+        : [],
+    };
+  });
 
   React.useEffect(() => {
-    if (ownerId != null) return;
-    const firstUser = usersQuery.data?.users[0];
-    if (firstUser) {
-      setOwnerId(firstUser.id);
+    if (groupId != null) return;
+    const firstGroup = groups[0];
+    if (firstGroup) {
+      setGroupId(firstGroup.id);
     }
-  }, [ownerId, usersQuery.data?.users]);
+  }, [groupId, groups]);
 
   function hasDraggedFiles(event: React.DragEvent<HTMLElement>) {
     return Array.from(event.dataTransfer.types).some((type) => type.toLowerCase() === "files");
   }
 
-  async function uploadFiles(files: FileList | File[]) {
+  async function uploadFiles(files: FileList | File[], ownerId: number) {
     const pdfs = Array.from(files).filter(
       (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
     );
@@ -83,12 +101,13 @@ function Expenses() {
       setUploadStatus("Drop a PDF statement.");
       return;
     }
-    if (ownerId == null) {
-      setUploadStatus("Select an owner before uploading.");
+    if (currentGroup == null) {
+      setUploadStatus("Select a group before uploading.");
       return;
     }
 
     const body = new FormData();
+    body.append("group_id", String(currentGroup.id));
     body.append("owner_id", String(ownerId));
     for (const file of pdfs) {
       body.append("file", file);
@@ -108,92 +127,88 @@ function Expenses() {
     setUploadStatus("Upload queued. The statement will appear after processing.");
   }
 
-  function onDrop(event: React.DragEvent<HTMLDivElement>) {
+  function onDrop(event: React.DragEvent<HTMLElement>, ownerId: number) {
     event.preventDefault();
-    setIsDragging(false);
-    void uploadFiles(event.dataTransfer.files);
+    setDraggingOwnerId(null);
+    void uploadFiles(event.dataTransfer.files, ownerId);
+  }
+
+  function updateExpenseData(expenseId: number, columnId: string, value: unknown) {
+    updateExpense.mutate({
+      id: expenseId,
+      patch: {
+        [columnId]:
+          columnId === "amount"
+            ? Number(value)
+            : columnId === "category" || columnId === "usedByTarget"
+              ? value == null
+                ? null
+                : Number(value)
+              : value,
+      },
+    });
   }
 
   if (error) return "An error has ocurred: " + error.message;
 
   return (
     <div className="container mx-auto space-y-4 p-5">
-      <div className="flex items-center gap-2">
-        <label className="text-sm font-medium" htmlFor="statement-owner">
-          Statement owner
-        </label>
-        <select
-          id="statement-owner"
-          className="rounded-md border bg-background px-3 py-2 text-sm"
-          value={ownerId ?? ""}
-          onChange={(event) => setOwnerId(Number(event.target.value))}
-        >
-          <option value="" disabled>
-            Select owner
-          </option>
-          {(usersQuery.data?.users ?? []).map((user) => (
-            <option key={user.id} value={user.id}>
-              {user.name}
-            </option>
-          ))}
-        </select>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-2xl font-semibold tracking-tight">{currentGroup?.name ?? "Expenses"}</h2>
       </div>
 
       {uploadStatus && <p className="text-sm text-muted-foreground">{uploadStatus}</p>}
 
-      <div
-        className="relative"
-        onDragEnter={(event) => {
-          event.preventDefault();
-          if (!hasDraggedFiles(event)) return;
-          setIsDragging(true);
-        }}
-        onDragLeave={(event) => {
-          event.preventDefault();
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-            setIsDragging(false);
-          }
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-          if (!hasDraggedFiles(event)) return;
-          setIsDragging(true);
-          event.dataTransfer.dropEffect = "copy";
-        }}
-        onDrop={onDrop}
-      >
-        {isDragging && (
-          <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-md border-4 border-dashed border-gray-400 bg-background/80 text-lg font-medium text-gray-600">
-            Drop files here
-          </div>
-        )}
+      <div className="grid gap-6 xl:grid-cols-2">
+        {memberTables.map(({ expenses: userExpenses, usageTarget, user }) => (
+          <section
+            key={user.id}
+            className="relative space-y-2"
+            onDragEnter={(event) => {
+              event.preventDefault();
+              if (!hasDraggedFiles(event)) return;
+              setDraggingOwnerId(user.id);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setDraggingOwnerId(null);
+              }
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              if (!hasDraggedFiles(event)) return;
+              setDraggingOwnerId(user.id);
+              event.dataTransfer.dropEffect = "copy";
+            }}
+            onDrop={(event) => onDrop(event, user.id)}
+          >
+            <h3 className="text-lg font-medium">{user.name} expenses</h3>
 
-        <DataTable
-          columns={columns}
-          data={(data?.expenses ?? []).map((expense) => ({
-            ...expense,
-            date: expense.date ? new Date(expense.date) : null,
-          }))}
-          selectOptions={{
-            category: categoriesQuery.data?.categories ?? [],
-            usedBy: usersQuery.data?.users ?? [],
-          }}
-          onUpdateData={(expenseId, columnId, value) => {
-            updateExpense.mutate({
-              id: expenseId,
-              patch: {
-                [columnId]:
-                  columnId === "amount"
-                    ? Number(value)
-                    : columnId === "category" || columnId === "usedBy"
-                      ? value == null
-                        ? null
-                        : Number(value)
-                      : value,
-              },
-            });
-          }}
-        />
+            <div className="relative">
+              {draggingOwnerId === user.id && (
+                <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-md border-4 border-dashed border-gray-400 bg-background/80 text-lg font-medium text-gray-600">
+                  Drop files for {user.name}
+                </div>
+              )}
+              <DataTable
+                columns={columns}
+                data={userExpenses}
+                selectOptions={{
+                  category: categoriesQuery.data?.categories ?? [],
+                  usedByTarget: usageTargets,
+                }}
+                onUpdateData={updateExpenseData}
+              />
+            </div>
+
+            {!usageTarget && (
+              <p className="text-sm text-muted-foreground">
+                Missing usage target for this group member.
+              </p>
+            )}
+          </section>
+        ))}
       </div>
     </div>
   );

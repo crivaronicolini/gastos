@@ -4,7 +4,7 @@ import { statementImportJsonSchema, statementImportSchema } from "@server/db/sch
 import { WorkflowEntrypoint, WorkflowStep } from "cloudflare:workers";
 import { extractText, getDocumentProxy } from "unpdf";
 
-type Params = { callback_url: string; file_url: string; owner_id: number };
+type Params = { callback_url: string; file_url: string; group_id: number; owner_id: number };
 
 type ChatCompletionResponse = {
   choices?: Array<{
@@ -104,6 +104,7 @@ export class ProcessFilesWorkflow extends WorkflowEntrypoint<Env, Params> {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             file_key: data.file_url,
+            group_id: event.payload.group_id,
             json_key: jsonKey,
             owner_id: event.payload.owner_id,
           }),
