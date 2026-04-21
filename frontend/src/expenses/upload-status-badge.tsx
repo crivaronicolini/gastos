@@ -7,9 +7,11 @@ import {
 } from "@/expenses/upload-tracking";
 
 export function UploadStatusBadge({
+  onDismiss,
   onRetry,
   uploads,
 }: {
+  onDismiss: (uploads: TrackedUpload[]) => void;
   onRetry: (uploads: TrackedUpload[]) => void;
   uploads: TrackedUpload[];
 }) {
@@ -21,9 +23,14 @@ export function UploadStatusBadge({
       .join("\n");
 
     return (
-      <button type="button" title={title} onClick={() => onRetry(failedUploads)}>
-        <Badge variant="destructive">{label}. Retry</Badge>
-      </button>
+      <div className="flex items-center gap-2">
+        <button type="button" title={title} onClick={() => onRetry(failedUploads)}>
+          <Badge variant="destructive">{label}. Retry</Badge>
+        </button>
+        <button type="button" onClick={() => onDismiss(failedUploads)}>
+          <Badge variant="outline">Dismiss</Badge>
+        </button>
+      </div>
     );
   }
 
@@ -42,7 +49,14 @@ export function UploadStatusBadge({
   const completedUploads = uploads.filter((upload) => upload.status === "complete");
   if (completedUploads.length > 0) {
     const label = completedUploads.length === 1 ? "Imported" : `${completedUploads.length} imported`;
-    return <Badge variant="outline">{label}</Badge>;
+    return (
+      <div className="flex items-center gap-2">
+        <Badge variant="outline">{label}</Badge>
+        <button type="button" onClick={() => onDismiss(completedUploads)}>
+          <Badge variant="outline">Dismiss</Badge>
+        </button>
+      </div>
+    );
   }
 
   return null;

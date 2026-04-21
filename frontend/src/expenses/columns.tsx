@@ -13,6 +13,7 @@ declare module "@tanstack/react-table" {
     formatValue?: (value: unknown, row?: TData) => string;
   }
   interface TableMeta<TData extends RowData> {
+    insertRelativeExpense: (anchorExpenseId: number, position: "above" | "below") => Promise<void>;
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
     selectOptions: Record<string, SelectCellOption[]>;
   }
@@ -212,7 +213,7 @@ export const columns: ColumnDef<Expense>[] = [
       headerClassName: "w-8",
       cellClassName: "w-8 whitespace-nowrap",
     },
-    cell: () => {
+    cell: ({ row, table }) => {
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -224,8 +225,16 @@ export const columns: ColumnDef<Expense>[] = [
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Accion 1</DropdownMenuItem>
-            <DropdownMenuItem>Accion 2</DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => void table.options.meta?.insertRelativeExpense(row.original.id, "above")}
+            >
+              Add row above
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => void table.options.meta?.insertRelativeExpense(row.original.id, "below")}
+            >
+              Add row below
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       );

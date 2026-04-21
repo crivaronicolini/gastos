@@ -175,7 +175,7 @@ export const statementImportExpenseSchema = expenseInsertSchema
     amount: z.number(),
     category: z.enum(categoryNames),
     date: z.string().nullable(),
-    installments: expenseInsertSchema.shape.installments.unwrap(),
+    installments: z.string().nullable(),
   })
   .strict();
 

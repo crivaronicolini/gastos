@@ -63,6 +63,8 @@ export class ProcessFilesWorkflow extends WorkflowEntrypoint<Env, Params> {
                 "Do not repeat card or bank inside expense items.",
                 "Each expense item must include title, date, category, amount, and currency.",
                 "Use currency ARS for peso amounts and USD for dollar amounts.",
+                "If the statement does not explicitly show installments, use installments: null.",
+                "Never infer installments from the expense date or statement month.",
               ].join(" "),
             },
             {

@@ -23,6 +23,7 @@ import {
 interface DataTableProps {
   columns: ColumnDef<Expense>[];
   data: Expense[];
+  onInsertRelativeExpense: (anchorExpenseId: number, position: "above" | "below") => Promise<void>;
   selectOptions: Record<string, SelectCellOption[]>;
   onUpdateData: (expenseId: number, columnId: string, value: unknown) => void;
   onDeleteExpenses: (expenseIds: number[]) => Promise<void>;
@@ -38,6 +39,7 @@ import { defaultColumn } from "./columns.tsx";
 export function DataTable({
   columns,
   data,
+  onInsertRelativeExpense,
   selectOptions,
   onUpdateData,
   onDeleteExpenses,
@@ -60,12 +62,14 @@ export function DataTable({
       rowSelection,
     },
     meta: {
+      insertRelativeExpense: onInsertRelativeExpense,
       updateData: onUpdateData,
       selectOptions,
     },
   });
 
   const selectedExpenseIds = table.getSelectedRowModel().rows.map((row) => row.original.id);
+  const hasRows = table.getRowModel().rows.length > 0;
 
   async function handleDeleteSelected() {
     if (selectedExpenseIds.length === 0) return;
@@ -77,9 +81,7 @@ export function DataTable({
     <div className="overflow-hidden rounded-md border">
       {selectedExpenseIds.length > 0 && (
         <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2">
-          <p className="text-sm text-muted-foreground">
-            {selectedExpenseIds.length} selected
-          </p>
+          <p className="text-sm text-muted-foreground">{selectedExpenseIds.length} selected</p>
           <Button
             variant="destructive"
             size="sm"
@@ -110,7 +112,7 @@ export function DataTable({
           ))}
         </TableHeader>
         <TableBody>
-          {table.getRowModel().rows?.length ? (
+          {hasRows ? (
             table.getRowModel().rows.map((row) => (
               <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
                 {row.getVisibleCells().map((cell) => (
@@ -123,27 +125,29 @@ export function DataTable({
           ) : (
             <TableRow>
               <TableCell colSpan={columns.length} className="h-24 text-center">
-                No results.
+                Drag you credit card statement here to begin!
               </TableCell>
             </TableRow>
           )}
         </TableBody>
-        <TableFooter>
-          {table.getFooterGroups().map((footerGroup) => (
-            <TableRow key={footerGroup.id}>
-              {footerGroup.headers.map((header) => (
-                <TableCell
-                  key={header.id}
-                  className={header.column.columnDef.meta?.footerClassName}
-                >
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(header.column.columnDef.footer, header.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableFooter>
+        {hasRows && (
+          <TableFooter>
+            {table.getFooterGroups().map((footerGroup) => (
+              <TableRow key={footerGroup.id}>
+                {footerGroup.headers.map((header) => (
+                  <TableCell
+                    key={header.id}
+                    className={header.column.columnDef.meta?.footerClassName}
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.footer, header.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableFooter>
+        )}
       </Table>
     </div>
   );

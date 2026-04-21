@@ -6,6 +6,7 @@ import * as React from "react";
 import { columns } from "@/expenses/columns";
 import { DataTable } from "@/expenses/data-table";
 import { useDeleteExpenses } from "@/expenses/use-delete-expenses";
+import { useInsertRelativeExpense } from "@/expenses/use-insert-relative-expense";
 import { UploadStatusBadge } from "@/expenses/upload-status-badge";
 import {
   activeWorkflowStatuses,
@@ -77,6 +78,10 @@ function readStoredUploads() {
   }
 }
 
+function isOptimisticWorkflowId(workflowId: string) {
+  return workflowId.startsWith("optimistic:");
+}
+
 async function getWorkflowStatuses(ids: string[]) {
   const params = new URLSearchParams({ ids: ids.join(",") });
   const res = await fetch(`/api/upload/status?${params.toString()}`);
@@ -123,7 +128,9 @@ export function Expenses() {
   const statementOwners = currentGroup?.members.map((member) => member.user) ?? [];
   const usageTargets = currentGroup?.usageTargets ?? [];
 
-  const trackedWorkflowIds = trackedUploads.map((upload) => upload.workflowId);
+  const trackedWorkflowIds = trackedUploads
+    .map((upload) => upload.workflowId)
+    .filter((workflowId) => !isOptimisticWorkflowId(workflowId));
 
   const workflowStatusesQuery = useQuery({
     queryKey: ["upload-workflow-statuses", trackedWorkflowIds.join(",")],
@@ -193,14 +200,48 @@ export function Expenses() {
 
       return (await res.json()) as UploadResponse;
     },
-    onSuccess: (payload) => {
+    onMutate: async ({ files, ownerId }) => {
+      if (!currentGroup) return { optimisticWorkflowIds: [] };
+
+      const optimisticUploads = Array.from(files)
+        .filter(
+          (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
+        )
+        .map((file) => ({
+          completedAt: undefined,
+          error: null,
+          fileKey: `optimistic:${file.name}`,
+          fileName: file.name,
+          groupId: currentGroup.id,
+          ownerId,
+          status: "queued" as const,
+          workflowId: `optimistic:${crypto.randomUUID()}`,
+        }));
+
       queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) => [
         ...current,
+        ...optimisticUploads,
+      ]);
+
+      return {
+        optimisticWorkflowIds: optimisticUploads.map((upload) => upload.workflowId),
+      };
+    },
+    onSuccess: (payload, _variables, context) => {
+      queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) => [
+        ...current.filter(
+          (upload) => !context?.optimisticWorkflowIds.includes(upload.workflowId),
+        ),
         ...payload.uploads.map((upload) => ({
           ...upload,
           status: "queued" as const,
         })),
       ]);
+    },
+    onError: (_error, _variables, context) => {
+      queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) =>
+        current.filter((upload) => !context?.optimisticWorkflowIds.includes(upload.workflowId)),
+      );
     },
   });
 
@@ -260,6 +301,7 @@ export function Expenses() {
   });
 
   const deleteExpenses = useDeleteExpenses();
+  const insertRelativeExpense = useInsertRelativeExpense();
   const updateExpense = useUpdateExpense();
   const expenses = (data?.expenses ?? []).map((expense) => ({
     ...expense,
@@ -320,6 +362,17 @@ export function Expenses() {
     await retryMutation.mutateAsync(uploads);
   }
 
+  function dismissUploads(uploadsToDismiss: TrackedUpload[]) {
+    queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) =>
+      current.filter(
+        (upload) =>
+          !uploadsToDismiss.some(
+            (dismissUpload) => dismissUpload.workflowId === upload.workflowId,
+          ),
+      ),
+    );
+  }
+
   function updateExpenseData(expenseId: number, columnId: string, value: unknown) {
     updateExpense.mutate({
       id: expenseId,
@@ -338,6 +391,21 @@ export function Expenses() {
 
   async function deleteSelectedExpenses(expenseIds: number[]) {
     await deleteExpenses.mutateAsync(expenseIds);
+  }
+
+  async function addRelativeExpense(
+    anchorExpenseId: number,
+    ownerId: number,
+    position: "above" | "below",
+  ) {
+    if (!currentGroup) return;
+
+    await insertRelativeExpense.mutateAsync({
+      anchorExpenseId,
+      groupId: currentGroup.id,
+      ownerId,
+      position,
+    });
   }
 
   if (error) return "An error has ocurred: " + error.message;
@@ -380,6 +448,7 @@ export function Expenses() {
                 uploads={uploads.filter(
                   (upload) => upload.groupId === currentGroup?.id && upload.ownerId === user.id,
                 )}
+                onDismiss={dismissUploads}
                 onRetry={(uploads) => void retryUploads(uploads)}
               />
             </div>
@@ -394,6 +463,9 @@ export function Expenses() {
                 columns={columns}
                 data={userExpenses}
                 isDeletingExpenses={deleteExpenses.isPending}
+                onInsertRelativeExpense={(anchorExpenseId, position) =>
+                  addRelativeExpense(anchorExpenseId, user.id, position)
+                }
                 onDeleteExpenses={deleteSelectedExpenses}
                 selectOptions={{
                   category: categoriesQuery.data?.categories ?? [],
