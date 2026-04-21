@@ -33,8 +33,12 @@ export const activeWorkflowStatuses = new Set<WorkflowStatus>([
   "waitingForPause",
 ]);
 
-export const failedWorkflowStatuses = new Set<WorkflowStatus>([
-  "errored",
-  "terminated",
-  "unknown",
-]);
+export const failedWorkflowStatuses = new Set<WorkflowStatus>(["errored", "terminated", "unknown"]);
+
+export type WorkflowStatusResponse = {
+  statuses: Array<{
+    error?: WorkflowError | null;
+    id: string;
+    status: WorkflowStatus;
+  }>;
+};
