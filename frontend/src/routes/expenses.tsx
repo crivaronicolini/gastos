@@ -2,16 +2,36 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 
-import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/ui/spinner";
 import { columns } from "@/expenses/columns";
 import { DataTable } from "@/expenses/data-table";
+import { UploadStatusBadge } from "@/expenses/upload-status-badge";
+import {
+  activeWorkflowStatuses,
+  type TrackedUpload,
+  type WorkflowError,
+  type WorkflowStatus,
+} from "@/expenses/upload-tracking";
 import { useUpdateExpense } from "@/expenses/use-update-expense";
 import { api } from "@/lib/api";
 
 export const Route = createFileRoute("/expenses")({
   component: Expenses,
 });
+
+const UPLOAD_STORAGE_KEY = "gastos:workflow-uploads";
+const SUCCESS_BADGE_TTL = 8_000;
+
+type UploadResponse = {
+  uploads: Array<Omit<TrackedUpload, "status">>;
+};
+
+type WorkflowStatusResponse = {
+  statuses: Array<{
+    error?: WorkflowError | null;
+    id: string;
+    status: WorkflowStatus;
+  }>;
+};
 
 async function getAllCategroies() {
   const res = await api.categories.$get();
@@ -39,59 +59,6 @@ async function getAllExpenses() {
   const data = await res.json();
   return data;
 }
-
-// TODO: move the badge stuff to a dedicated file
-const UPLOAD_STORAGE_KEY = "gastos:workflow-uploads";
-const SUCCESS_BADGE_TTL = 8_000;
-
-type WorkflowStatus =
-  | "queued"
-  | "running"
-  | "paused"
-  | "errored"
-  | "terminated"
-  | "complete"
-  | "waiting"
-  | "waitingForPause"
-  | "unknown";
-
-type WorkflowError = {
-  message: string;
-  name?: string;
-};
-
-type TrackedUpload = {
-  completedAt?: number;
-  error?: WorkflowError | null;
-  fileKey: string;
-  fileName: string;
-  groupId: number;
-  ownerId: number;
-  status: WorkflowStatus;
-  workflowId: string;
-};
-
-type UploadResponse = {
-  uploads: Array<Omit<TrackedUpload, "status">>;
-};
-
-type WorkflowStatusResponse = {
-  statuses: Array<{
-    error?: WorkflowError | null;
-    id: string;
-    status: WorkflowStatus;
-  }>;
-};
-
-const activeWorkflowStatuses = new Set<WorkflowStatus>([
-  "queued",
-  "running",
-  "paused",
-  "waiting",
-  "waitingForPause",
-]);
-
-const failedWorkflowStatuses = new Set<WorkflowStatus>(["errored", "terminated", "unknown"]);
 
 function readStoredUploads() {
   if (typeof window === "undefined") return [];
@@ -134,50 +101,7 @@ async function retryWorkflow(id: string) {
   return (await res.json()) as WorkflowStatusResponse["statuses"][number];
 }
 
-function UploadStatusBadge({
-  onRetry,
-  uploads,
-}: {
-  onRetry: (uploads: TrackedUpload[]) => void;
-  uploads: TrackedUpload[];
-}) {
-  const failedUploads = uploads.filter((upload) => failedWorkflowStatuses.has(upload.status));
-  if (failedUploads.length > 0) {
-    const label = failedUploads.length === 1 ? "Failed" : `${failedUploads.length} failed`;
-    const title = failedUploads
-      .map((upload) => upload.error?.message ?? `${upload.fileName} failed`)
-      .join("\n");
-
-    return (
-      <button type="button" title={title} onClick={() => onRetry(failedUploads)}>
-        <Badge variant="destructive">{label}. Retry</Badge>
-      </button>
-    );
-  }
-
-  const activeUploads = uploads.filter((upload) => activeWorkflowStatuses.has(upload.status));
-  if (activeUploads.length > 0) {
-    const label = activeUploads.length === 1 ? "Processing" : `${activeUploads.length} processing`;
-
-    return (
-      <Badge variant="secondary">
-        <Spinner data-icon="inline-start" className="size-3" />
-        {label}
-      </Badge>
-    );
-  }
-
-  const completedUploads = uploads.filter((upload) => upload.status === "complete");
-  if (completedUploads.length > 0) {
-    const label =
-      completedUploads.length === 1 ? "Imported" : `${completedUploads.length} imported`;
-    return <Badge variant="outline">{label}</Badge>;
-  }
-
-  return null;
-}
-
-function Expenses() {
+export function Expenses() {
   const [draggingOwnerId, setDraggingOwnerId] = React.useState<number | null>(null);
   const [groupId, setGroupId] = React.useState<number | null>(null);
   const [trackedUploads, setTrackedUploads] = React.useState<TrackedUpload[]>(readStoredUploads);
@@ -214,7 +138,7 @@ function Expenses() {
   });
 
   const updateExpense = useUpdateExpense();
-  const groups = groupsQuery.data?.groups ?? [];
+  const groups = React.useMemo(() => groupsQuery.data?.groups ?? [], [groupsQuery.data?.groups]);
   const currentGroup = groups.find((group) => group.id === groupId) ?? groups[0];
   const statementOwners = currentGroup?.members.map((member) => member.user) ?? [];
   const usageTargets = currentGroup?.usageTargets ?? [];
