@@ -185,8 +185,9 @@ export const uploadRoute = new Hono<AppEnv>()
 
       const expenseRows = await Promise.all(
         statementImport.expenses.map(async (expense) => ({
-          amount: expense.amount ?? expense.amount_usd,
+          amount: expense.amount,
           category: await findCategoryId(db, expense.category),
+          currency: expense.currency,
           date: parseStatementDate(expense.date),
           installments: expense.installments,
           origin: statementImport.card ?? statementImport.bank ?? "unknown",

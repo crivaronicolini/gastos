@@ -12,6 +12,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -89,6 +90,22 @@ export function DataTable({ columns, data, selectOptions, onUpdateData }: DataTa
             </TableRow>
           )}
         </TableBody>
+        <TableFooter>
+          {table.getFooterGroups().map((footerGroup) => (
+            <TableRow key={footerGroup.id}>
+              {footerGroup.headers.map((header) => (
+                <TableCell
+                  key={header.id}
+                  className={header.column.columnDef.meta?.footerClassName}
+                >
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(header.column.columnDef.footer, header.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableFooter>
       </Table>
     </div>
   );

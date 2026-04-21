@@ -13,7 +13,9 @@ export function EditableCell({ getValue, row, column, table }: CellContext<Expen
   const isDateInput = column.columnDef.meta?.inputType === "date";
 
   const inputValue =
-    formatValue && (!isEditing || isDateInput) ? formatValue(value) : String(value ?? "");
+    formatValue && (!isEditing || isDateInput)
+      ? formatValue(value, row.original)
+      : String(value ?? "");
 
   const onBlur = () => {
     setIsEditing(false);

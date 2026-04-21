@@ -14,7 +14,10 @@ export const expenseRoute = new Hono<AppEnv>()
   })
   .get("/total-spent", async (c) => {
     const db = c.get("db");
-    const total = await db.select({ total: sum(expenses.amount) }).from(expenses);
+    const total = await db
+      .select({ currency: expenses.currency, total: sum(expenses.amount) })
+      .from(expenses)
+      .groupBy(expenses.currency);
     return c.json({ total });
   })
   .post("/", zValidator("json", expenseInsertSchema), async (c) => {

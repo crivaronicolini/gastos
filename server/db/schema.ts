@@ -56,6 +56,7 @@ export const expenses = sqliteTable("expenses", {
   origin: text().notNull(),
   title: text().notNull(),
   amount: numeric({ mode: "number" }),
+  currency: text().notNull().default("ARS"),
   date: integer({ mode: "timestamp" }),
   installments: text(),
   category: int().references(() => categories.id),
@@ -64,9 +65,11 @@ export const expenses = sqliteTable("expenses", {
 
 export const expenseSelectSchema = createSelectSchema(expenses);
 export const expenseInsertSchema = createInsertSchema(expenses, {
+  currency: z.enum(["ARS", "USD"]).default("ARS"),
   date: z.coerce.date().optional().nullable(),
 });
 export const expenseUpdateSchema = createUpdateSchema(expenses, {
+  currency: z.enum(["ARS", "USD"]).optional(),
   date: z.coerce.date().optional().nullable(),
 });
 
@@ -165,20 +168,16 @@ export const categoryNames = [
 
 export const statementImportExpenseSchema = expenseInsertSchema
   .pick({
+    currency: true,
     title: true,
   })
   .extend({
-    amount: z.number().nullable(),
-    amount_usd: z.number().nullable(),
+    amount: z.number(),
     category: z.enum(categoryNames),
     date: z.string().nullable(),
     installments: expenseInsertSchema.shape.installments.unwrap(),
   })
-  .strict()
-  .refine((expense) => expense.amount !== null || expense.amount_usd !== null, {
-    message: "Either amount or amount_usd is required",
-    path: ["amount"],
-  });
+  .strict();
 
 export const statementImportSchema = z
   .object({

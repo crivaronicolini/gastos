@@ -61,7 +61,8 @@ export class ProcessFilesWorkflow extends WorkflowEntrypoint<Env, Params> {
                 "You are an accountant specialized in credit card statements.",
                 "Return one JSON object with card, bank, and expenses.",
                 "Do not repeat card or bank inside expense items.",
-                "Each expense item must include title, date, category, and either amount or amount_usd.",
+                "Each expense item must include title, date, category, amount, and currency.",
+                "Use currency ARS for peso amounts and USD for dollar amounts.",
               ].join(" "),
             },
             {

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
@@ -17,6 +18,7 @@ function CreateExpense() {
       title: "",
       origin: "",
       amount: 0,
+      currency: "ARS" as "ARS" | "USD",
     },
     onSubmit: async ({ value }) => {
       // Do something with form data
@@ -38,7 +40,7 @@ function CreateExpense() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          e.stopPropagation;
+          e.stopPropagation();
           void form.handleSubmit();
         }}
         className="w-full"
@@ -105,6 +107,28 @@ function CreateExpense() {
                     aria-invalid={isInvalid}
                     autoComplete="off"
                   />
+                  {isInvalid && <FieldError errors={field.state.meta.errors} />}
+                </Field>
+              );
+            }}
+          />
+          <form.Field
+            name="currency"
+            children={(field) => {
+              const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+              return (
+                <Field data-invalid={isInvalid}>
+                  <FieldLabel htmlFor={field.name}>Currency</FieldLabel>
+                  <select
+                    id={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value as "ARS" | "USD")}
+                    aria-invalid={isInvalid}
+                  >
+                    <option value="ARS">ARS</option>
+                    <option value="USD">USD</option>
+                  </select>
                   {isInvalid && <FieldError errors={field.state.meta.errors} />}
                 </Field>
               );

@@ -1,20 +1,23 @@
 import "@tanstack/react-table";
 import type { ColumnDef, RowData } from "@tanstack/react-table";
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 declare module "@tanstack/react-table" {
   interface ColumnMeta<TData extends RowData, TValue> {
     headerClassName?: string;
     cellClassName?: string;
+    footerClassName?: string;
     inputClassName?: string;
     inputType?: React.HTMLInputTypeAttribute;
     inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
-    formatValue?: (value: unknown) => string;
+    formatValue?: (value: unknown, row?: TData) => string;
   }
   interface TableMeta<TData extends RowData> {
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
     selectOptions: Record<string, SelectCellOption[]>;
   }
 }
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 import type { Expense } from "@server/db/schema";
 
@@ -34,6 +37,13 @@ import {
 } from "../components/ui/dropdown-menu.tsx";
 import { EditableCell } from "./editable-cell.tsx";
 import { SelectCell } from "./select-cell.tsx";
+
+function formatCurrency(amount: number, currency: string) {
+  return new Intl.NumberFormat(currency === "USD" ? "en-US" : "es-AR", {
+    style: "currency",
+    currency,
+  }).format(amount);
+}
 
 export const defaultColumn: Partial<ColumnDef<Expense>> = {
   cell: EditableCell,
@@ -59,7 +69,7 @@ export const columns: ColumnDef<Expense>[] = [
     accessorKey: "date",
     meta: {
       inputType: "date",
-      formatValue: (value) => {
+      formatValue: (value: unknown) => {
         if (!value) return "";
         return new Date(value as string | number).toISOString().slice(0, 10);
       },
@@ -94,6 +104,10 @@ export const columns: ColumnDef<Expense>[] = [
 
   {
     accessorKey: "installments",
+    footer: () => "Total",
+    meta: {
+      footerClassName: "font-medium",
+    },
     header: ({ column }) => {
       return (
         <Button
@@ -111,17 +125,33 @@ export const columns: ColumnDef<Expense>[] = [
     accessorKey: "amount",
     header: "Amount",
     cell: EditableCell,
+    footer: ({ table }) => {
+      const totalsByCurrency = table.getRowModel().rows.reduce<Record<string, number>>(
+        (totals, row) => {
+          const currency = row.original.currency ?? "ARS";
+          totals[currency] = (totals[currency] ?? 0) + Number(row.original.amount ?? 0);
+          return totals;
+        },
+        {},
+      );
+
+      return (
+        <div className="space-y-1">
+          {Object.entries(totalsByCurrency).map(([currency, total]) => (
+            <div key={currency}>{formatCurrency(total, currency)}</div>
+          ))}
+        </div>
+      );
+    },
     meta: {
       headerClassName: "text-right",
       cellClassName: "text-right",
+      footerClassName: "text-right font-medium",
       inputClassName: "w-full text-right",
       inputType: "text",
       inputMode: "decimal",
-      formatValue: (value) =>
-        new Intl.NumberFormat("en-US", {
-          style: "currency",
-          currency: "USD",
-        }).format(Number(value)),
+      formatValue: (value: unknown, row?: Expense) =>
+        formatCurrency(Number(value), row?.currency ?? "ARS"),
     },
   },
 

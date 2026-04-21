@@ -28,7 +28,7 @@ export function SelectCell({ getValue, row, column, table }: CellContext<Expense
     >
       <option value="">None</option>
 
-      {options.map((option) => (
+      {options.map((option: SelectCellOption) => (
         <option key={option.id} value={option.id}>
           {option.name}
         </option>
