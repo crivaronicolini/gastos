@@ -24,6 +24,7 @@ import type { Expense } from "@server/db/schema";
 import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import type { SelectCellOption } from "./select-cell.tsx";
 
@@ -50,6 +51,25 @@ export const defaultColumn: Partial<ColumnDef<Expense>> = {
 };
 
 export const columns: ColumnDef<Expense>[] = [
+  {
+    id: "select",
+    header: ({ table }) => (
+      <Checkbox
+        checked={
+          table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")
+        }
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="Select row"
+      />
+    ),
+  },
   {
     accessorKey: "origin",
     header: ({ column }) => {
@@ -126,14 +146,13 @@ export const columns: ColumnDef<Expense>[] = [
     header: "Amount",
     cell: EditableCell,
     footer: ({ table }) => {
-      const totalsByCurrency = table.getRowModel().rows.reduce<Record<string, number>>(
-        (totals, row) => {
+      const totalsByCurrency = table
+        .getRowModel()
+        .rows.reduce<Record<string, number>>((totals, row) => {
           const currency = row.original.currency ?? "ARS";
           totals[currency] = (totals[currency] ?? 0) + Number(row.original.amount ?? 0);
           return totals;
-        },
-        {},
-      );
+        }, {});
 
       return (
         <div className="space-y-1">

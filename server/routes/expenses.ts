@@ -2,8 +2,9 @@ import type { AppEnv } from "@server/app";
 
 import { zValidator } from "@hono/zod-validator";
 import { expenses, expenseInsertSchema, expenseUpdateSchema } from "@server/db/schema";
-import { sum, eq } from "drizzle-orm";
+import { sum, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
+import { z } from "zod";
 
 export const expenseRoute = new Hono<AppEnv>()
   .get("/", async (c) => {
@@ -27,6 +28,21 @@ export const expenseRoute = new Hono<AppEnv>()
     c.status(201);
     return c.json(ret);
   })
+  .post(
+    "/bulk-delete",
+    zValidator(
+      "json",
+      z.object({
+        ids: z.array(z.number().int().positive()).min(1),
+      }),
+    ),
+    async (c) => {
+      const db = c.get("db");
+      const { ids } = c.req.valid("json");
+      const deleted = await db.delete(expenses).where(inArray(expenses.id, ids)).returning();
+      return c.json({ deleted });
+    },
+  )
   .get("/:id{[0-9]+}", async (c) => {
     const db = c.get("db");
     const id = Number.parseInt(c.req.param("id"));

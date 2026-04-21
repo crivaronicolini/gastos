@@ -5,6 +5,7 @@ import * as React from "react";
 
 import { columns } from "@/expenses/columns";
 import { DataTable } from "@/expenses/data-table";
+import { useDeleteExpenses } from "@/expenses/use-delete-expenses";
 import { UploadStatusBadge } from "@/expenses/upload-status-badge";
 import {
   activeWorkflowStatuses,
@@ -258,6 +259,7 @@ export function Expenses() {
     },
   });
 
+  const deleteExpenses = useDeleteExpenses();
   const updateExpense = useUpdateExpense();
   const expenses = (data?.expenses ?? []).map((expense) => ({
     ...expense,
@@ -334,6 +336,10 @@ export function Expenses() {
     });
   }
 
+  async function deleteSelectedExpenses(expenseIds: number[]) {
+    await deleteExpenses.mutateAsync(expenseIds);
+  }
+
   if (error) return "An error has ocurred: " + error.message;
 
   return (
@@ -387,6 +393,8 @@ export function Expenses() {
               <DataTable
                 columns={columns}
                 data={userExpenses}
+                isDeletingExpenses={deleteExpenses.isPending}
+                onDeleteExpenses={deleteSelectedExpenses}
                 selectOptions={{
                   category: categoriesQuery.data?.categories ?? [],
                   usedByTarget: usageTargets,
