@@ -1,7 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { Spinner } from "@/components/ui/spinner";
 import { columns } from "@/expenses/columns";
 import { DataTable } from "@/expenses/data-table";
 import { useUpdateExpense } from "@/expenses/use-update-expense";
@@ -38,10 +40,149 @@ async function getAllExpenses() {
   return data;
 }
 
+// TODO: move the badge stuff to a dedicated file
+const UPLOAD_STORAGE_KEY = "gastos:workflow-uploads";
+const SUCCESS_BADGE_TTL = 8_000;
+
+type WorkflowStatus =
+  | "queued"
+  | "running"
+  | "paused"
+  | "errored"
+  | "terminated"
+  | "complete"
+  | "waiting"
+  | "waitingForPause"
+  | "unknown";
+
+type WorkflowError = {
+  message: string;
+  name?: string;
+};
+
+type TrackedUpload = {
+  completedAt?: number;
+  error?: WorkflowError | null;
+  fileKey: string;
+  fileName: string;
+  groupId: number;
+  ownerId: number;
+  status: WorkflowStatus;
+  workflowId: string;
+};
+
+type UploadResponse = {
+  uploads: Array<Omit<TrackedUpload, "status">>;
+};
+
+type WorkflowStatusResponse = {
+  statuses: Array<{
+    error?: WorkflowError | null;
+    id: string;
+    status: WorkflowStatus;
+  }>;
+};
+
+const activeWorkflowStatuses = new Set<WorkflowStatus>([
+  "queued",
+  "running",
+  "paused",
+  "waiting",
+  "waitingForPause",
+]);
+
+const failedWorkflowStatuses = new Set<WorkflowStatus>(["errored", "terminated", "unknown"]);
+
+function readStoredUploads() {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const value = window.localStorage.getItem(UPLOAD_STORAGE_KEY);
+    if (!value) return [];
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter((upload): upload is TrackedUpload => {
+      return (
+        typeof upload?.workflowId === "string" &&
+        typeof upload.fileName === "string" &&
+        typeof upload.fileKey === "string" &&
+        typeof upload.groupId === "number" &&
+        typeof upload.ownerId === "number" &&
+        typeof upload.status === "string"
+      );
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function getWorkflowStatuses(ids: string[]) {
+  const params = new URLSearchParams({ ids: ids.join(",") });
+  const res = await fetch(`/api/upload/status?${params.toString()}`);
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+  return (await res.json()) as WorkflowStatusResponse;
+}
+
+async function retryWorkflow(id: string) {
+  const res = await fetch(`/api/upload/${id}/retry`, { method: "POST" });
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+  return (await res.json()) as WorkflowStatusResponse["statuses"][number];
+}
+
+function UploadStatusBadge({
+  onRetry,
+  uploads,
+}: {
+  onRetry: (uploads: TrackedUpload[]) => void;
+  uploads: TrackedUpload[];
+}) {
+  const failedUploads = uploads.filter((upload) => failedWorkflowStatuses.has(upload.status));
+  if (failedUploads.length > 0) {
+    const label = failedUploads.length === 1 ? "Failed" : `${failedUploads.length} failed`;
+    const title = failedUploads
+      .map((upload) => upload.error?.message ?? `${upload.fileName} failed`)
+      .join("\n");
+
+    return (
+      <button type="button" title={title} onClick={() => onRetry(failedUploads)}>
+        <Badge variant="destructive">{label}. Retry</Badge>
+      </button>
+    );
+  }
+
+  const activeUploads = uploads.filter((upload) => activeWorkflowStatuses.has(upload.status));
+  if (activeUploads.length > 0) {
+    const label = activeUploads.length === 1 ? "Processing" : `${activeUploads.length} processing`;
+
+    return (
+      <Badge variant="secondary">
+        <Spinner data-icon="inline-start" className="size-3" />
+        {label}
+      </Badge>
+    );
+  }
+
+  const completedUploads = uploads.filter((upload) => upload.status === "complete");
+  if (completedUploads.length > 0) {
+    const label =
+      completedUploads.length === 1 ? "Imported" : `${completedUploads.length} imported`;
+    return <Badge variant="outline">{label}</Badge>;
+  }
+
+  return null;
+}
+
 function Expenses() {
   const [draggingOwnerId, setDraggingOwnerId] = React.useState<number | null>(null);
   const [groupId, setGroupId] = React.useState<number | null>(null);
-  const [uploadStatus, setUploadStatus] = React.useState<string | null>(null);
+  const [trackedUploads, setTrackedUploads] = React.useState<TrackedUpload[]>(readStoredUploads);
+  const completedWorkflowIds = React.useRef(new Set<string>());
+  const queryClient = useQueryClient();
 
   const categoriesQuery = useQuery({
     queryKey: ["get-all-categories"],
@@ -59,6 +200,17 @@ function Expenses() {
     queryKey: ["get-all-expenses"],
     queryFn: getAllExpenses,
     staleTime: 1000 * 60,
+  });
+
+  const activeWorkflowIds = trackedUploads
+    .filter((upload) => activeWorkflowStatuses.has(upload.status))
+    .map((upload) => upload.workflowId);
+
+  const workflowStatusesQuery = useQuery({
+    queryKey: ["upload-workflow-statuses", activeWorkflowIds.join(",")],
+    queryFn: () => getWorkflowStatuses(activeWorkflowIds),
+    enabled: activeWorkflowIds.length > 0,
+    refetchInterval: 10_000,
   });
 
   const updateExpense = useUpdateExpense();
@@ -89,6 +241,64 @@ function Expenses() {
     }
   }, [groupId, groups]);
 
+  React.useEffect(() => {
+    window.localStorage.setItem(UPLOAD_STORAGE_KEY, JSON.stringify(trackedUploads));
+  }, [trackedUploads]);
+
+  React.useEffect(() => {
+    const data = workflowStatusesQuery.data;
+    if (!data) return;
+
+    const statusesById = new Map(data.statuses.map((status) => [status.id, status]));
+    let shouldRefreshExpenses = false;
+
+    for (const status of data.statuses) {
+      if (status.status === "complete" && !completedWorkflowIds.current.has(status.id)) {
+        completedWorkflowIds.current.add(status.id);
+        shouldRefreshExpenses = true;
+      }
+      if (status.status !== "complete") {
+        completedWorkflowIds.current.delete(status.id);
+      }
+    }
+
+    setTrackedUploads((uploads) =>
+      uploads.map((upload) => {
+        const nextStatus = statusesById.get(upload.workflowId);
+        if (!nextStatus) return upload;
+
+        return {
+          ...upload,
+          completedAt:
+            nextStatus.status === "complete" ? (upload.completedAt ?? Date.now()) : undefined,
+          error: nextStatus.error ?? null,
+          status: nextStatus.status,
+        };
+      }),
+    );
+
+    if (shouldRefreshExpenses) {
+      void queryClient.invalidateQueries({ queryKey: ["get-all-expenses"] });
+    }
+  }, [queryClient, workflowStatusesQuery.data]);
+
+  React.useEffect(() => {
+    if (!trackedUploads.some((upload) => upload.status === "complete")) return;
+
+    const timeout = window.setTimeout(() => {
+      setTrackedUploads((uploads) =>
+        uploads.filter(
+          (upload) =>
+            upload.status !== "complete" ||
+            upload.completedAt == null ||
+            Date.now() - upload.completedAt < SUCCESS_BADGE_TTL,
+        ),
+      );
+    }, SUCCESS_BADGE_TTL);
+
+    return () => window.clearTimeout(timeout);
+  }, [trackedUploads]);
+
   function hasDraggedFiles(event: React.DragEvent<HTMLElement>) {
     return Array.from(event.dataTransfer.types).some((type) => type.toLowerCase() === "files");
   }
@@ -97,14 +307,6 @@ function Expenses() {
     const pdfs = Array.from(files).filter(
       (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
     );
-    if (pdfs.length === 0) {
-      setUploadStatus("Drop a PDF statement.");
-      return;
-    }
-    if (currentGroup == null) {
-      setUploadStatus("Select a group before uploading.");
-      return;
-    }
 
     const body = new FormData();
     body.append("group_id", String(currentGroup.id));
@@ -113,24 +315,77 @@ function Expenses() {
       body.append("file", file);
     }
 
-    setUploadStatus(`Uploading ${pdfs.length} statement${pdfs.length === 1 ? "" : "s"}...`);
     const res = await fetch("/api/upload", {
       method: "POST",
       body,
     });
-    if (!res.ok) {
-      const message = await res.text();
-      setUploadStatus(message || "Upload failed.");
-      return;
-    }
 
-    setUploadStatus("Upload queued. The statement will appear after processing.");
+    const payload = (await res.json()) as UploadResponse;
+    setTrackedUploads((uploads) => [
+      ...uploads,
+      ...payload.uploads.map((upload) => ({
+        ...upload,
+        status: "queued" as const,
+      })),
+    ]);
   }
 
   function onDrop(event: React.DragEvent<HTMLElement>, ownerId: number) {
     event.preventDefault();
     setDraggingOwnerId(null);
     void uploadFiles(event.dataTransfer.files, ownerId);
+  }
+
+  async function retryUploads(uploads: TrackedUpload[]) {
+    setTrackedUploads((currentUploads) =>
+      currentUploads.map((upload) =>
+        uploads.some((retryUpload) => retryUpload.workflowId === upload.workflowId)
+          ? { ...upload, completedAt: undefined, error: null, status: "queued" }
+          : upload,
+      ),
+    );
+
+    const results = await Promise.all(
+      uploads.map(async (upload) => {
+        try {
+          return {
+            ok: true as const,
+            status: await retryWorkflow(upload.workflowId),
+            upload,
+          };
+        } catch (error) {
+          return {
+            error,
+            ok: false as const,
+            upload,
+          };
+        }
+      }),
+    );
+
+    setTrackedUploads((currentUploads) =>
+      currentUploads.map((upload) => {
+        const result = results.find((item) => item.upload.workflowId === upload.workflowId);
+        if (!result) return upload;
+
+        if (result.ok) {
+          return {
+            ...upload,
+            error: result.status.error ?? null,
+            status: result.status.status,
+          };
+        }
+
+        return {
+          ...upload,
+          error: {
+            message: result.error instanceof Error ? result.error.message : String(result.error),
+            name: "WorkflowRetryError",
+          },
+          status: "errored",
+        };
+      }),
+    );
   }
 
   function updateExpenseData(expenseId: number, columnId: string, value: unknown) {
@@ -154,10 +409,10 @@ function Expenses() {
   return (
     <div className="container mx-auto space-y-4 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-semibold tracking-tight">{currentGroup?.name ?? "Expenses"}</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">
+          {currentGroup?.name ?? "Expenses"}
+        </h2>
       </div>
-
-      {uploadStatus && <p className="text-sm text-muted-foreground">{uploadStatus}</p>}
 
       <div className="grid gap-6 xl:grid-cols-2">
         {memberTables.map(({ expenses: userExpenses, usageTarget, user }) => (
@@ -183,7 +438,15 @@ function Expenses() {
             }}
             onDrop={(event) => onDrop(event, user.id)}
           >
-            <h3 className="text-lg font-medium">{user.name} expenses</h3>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-lg font-medium">{user.name} expenses</h3>
+              <UploadStatusBadge
+                uploads={trackedUploads.filter(
+                  (upload) => upload.groupId === currentGroup?.id && upload.ownerId === user.id,
+                )}
+                onRetry={(uploads) => void retryUploads(uploads)}
+              />
+            </div>
 
             <div className="relative">
               {draggingOwnerId === user.id && (

@@ -88,6 +88,42 @@ function chunkArray<T>(items: T[], size: number) {
 }
 
 export const uploadRoute = new Hono<AppEnv>()
+  .get("/status", async (c) => {
+    const ids = (c.req.query("ids") ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .slice(0, 25);
+
+    if (ids.length === 0) {
+      return c.json({ statuses: [] });
+    }
+
+    const statuses = await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const instance = await c.env.process_files_WF.get(id);
+          const status = await instance.status();
+          return { id, ...status };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return {
+            error: { message, name: "WorkflowStatusError" },
+            id,
+            status: "unknown" as const,
+          };
+        }
+      }),
+    );
+
+    return c.json({ statuses });
+  })
+  .post("/:id/retry", async (c) => {
+    const id = c.req.param("id");
+    const instance = await c.env.process_files_WF.get(id);
+    await instance.restart();
+    return c.json({ id, ...(await instance.status()) });
+  })
   .post("/webhook", async (c) => {
     const body = uploadWebhookSchema.safeParse(await c.req.json());
     if (!body.success) {
@@ -112,6 +148,22 @@ export const uploadRoute = new Hono<AppEnv>()
       const ownerId = await findStatementOwnerId(db, owner_id);
       await requireGroupMember(db, groupId, ownerId);
       const ownerUsageTargetId = await findUsageTargetIdForUser(db, groupId, ownerId);
+
+      const [existingStatement] = await db
+        .select()
+        .from(statements)
+        .where(eq(statements.sourceFileKey, file_key));
+      if (existingStatement) {
+        const existingExpenses = await db
+          .select()
+          .from(expenses)
+          .where(eq(expenses.statement, existingStatement.id));
+        return c.json({
+          duplicate: true,
+          expenses: existingExpenses,
+          statement: existingStatement,
+        });
+      }
 
       const [statement] = await db
         .insert(statements)
@@ -210,7 +262,7 @@ export const uploadRoute = new Hono<AppEnv>()
     }
 
     const callbackUrl = new URL("/api/upload/webhook", c.req.url).toString();
-    const instances = await Promise.all(
+    const uploads = await Promise.all(
       files.map(async (file) => {
         const id = crypto.randomUUID();
         const upload = await c.env.R2.put(id.slice(0, 5) + "-" + file.name, file);
@@ -218,17 +270,37 @@ export const uploadRoute = new Hono<AppEnv>()
           throw new Error(`Failed to upload file: ${file.name}`);
         }
         return {
-          id,
-          params: {
-            callback_url: callbackUrl,
-            file_url: upload.key,
-            group_id: groupId,
-            owner_id: ownerId,
+          fileKey: upload.key,
+          fileName: file.name,
+          groupId,
+          ownerId,
+          workflow: {
+            id,
+            params: {
+              callback_url: callbackUrl,
+              file_url: upload.key,
+              group_id: groupId,
+              owner_id: ownerId,
+            },
           },
         };
       }),
     );
 
-    await c.env.process_files_WF.createBatch(instances);
-    return new Response("File uploaded successfully", { status: 200 });
+    const instances = await c.env.process_files_WF.createBatch(
+      uploads.map((upload) => upload.workflow),
+    );
+
+    return c.json(
+      {
+        uploads: uploads.map((upload, index) => ({
+          fileKey: upload.fileKey,
+          fileName: upload.fileName,
+          groupId: upload.groupId,
+          ownerId: upload.ownerId,
+          workflowId: instances[index]?.id ?? upload.workflow.id,
+        })),
+      },
+      202,
+    );
   });
