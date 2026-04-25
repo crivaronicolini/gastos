@@ -29,7 +29,7 @@ export function EditableCell({ getValue, row, column, table }: CellContext<Expen
 
   return (
     <input
-      className={column.columnDef.meta?.inputClassName}
+      className={column.columnDef.meta?.inputClassName ?? "w-full min-w-0 bg-transparent text-sm"}
       type={column.columnDef.meta?.inputType ?? "text"}
       inputMode={column.columnDef.meta?.inputMode}
       value={inputValue}

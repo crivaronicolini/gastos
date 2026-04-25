@@ -22,7 +22,7 @@ declare module "@tanstack/react-table" {
 
 import type { Expense } from "@server/db/schema";
 
-import { ArrowUpDown, MoreHorizontal } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -39,6 +39,7 @@ import {
 } from "../components/ui/dropdown-menu.tsx";
 import { EditableCell } from "./editable-cell.tsx";
 import { SelectCell } from "./select-cell.tsx";
+import { SortableHeader } from "./sortable-header.tsx";
 
 function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat(currency === "USD" ? "en-US" : "es-AR", {
@@ -54,6 +55,10 @@ export const defaultColumn: Partial<ColumnDef<Expense>> = {
 export const columns: ColumnDef<Expense>[] = [
   {
     id: "select",
+    meta: {
+      headerClassName: "w-8",
+      cellClassName: "w-8 whitespace-nowrap",
+    },
     header: ({ table }) => (
       <Checkbox
         checked={
@@ -73,78 +78,54 @@ export const columns: ColumnDef<Expense>[] = [
   },
   {
     accessorKey: "origin",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Origen
-          <ArrowUpDown className="ml-1 h-4 w-4" />
-        </Button>
-      );
+    meta: {
+      headerClassName: "w-20",
+      cellClassName: "break-words",
+      inputClassName: "w-full min-w-0 bg-transparent text-sm",
     },
+    header: ({ column }) => <SortableHeader column={column} label="Origen" />,
   },
 
   {
     accessorKey: "date",
     meta: {
+      headerClassName: "w-24 whitespace-nowrap",
+      cellClassName: "whitespace-nowrap",
+      inputClassName: "w-full min-w-0 bg-transparent text-sm",
       inputType: "date",
       formatValue: (value: unknown) => {
         if (!value) return "";
         return new Date(value as string | number).toISOString().slice(0, 10);
       },
     },
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Fecha
-          <ArrowUpDown className="ml-1 h-4 w-4" />
-        </Button>
-      );
-    },
+    header: ({ column }) => <SortableHeader column={column} label="Fecha" />,
   },
 
   {
     accessorKey: "title",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Nombre
-          <ArrowUpDown className="ml-1 h-4 w-4" />
-        </Button>
-      );
+    meta: {
+      headerClassName: "w-[22%]",
+      cellClassName: "break-words",
+      inputClassName: "w-full min-w-0 bg-transparent text-sm",
     },
+    header: ({ column }) => <SortableHeader column={column} label="Nombre" />,
   },
 
   {
     accessorKey: "installments",
     footer: () => "Total",
     meta: {
-      footerClassName: "font-medium",
+      headerClassName: "w-16 whitespace-nowrap",
+      cellClassName: "whitespace-nowrap",
+      footerClassName: "font-medium whitespace-nowrap",
+      inputClassName: "w-full min-w-0 bg-transparent text-sm",
     },
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Cuotas
-          <ArrowUpDown className="ml-1 h-4 w-4" />
-        </Button>
-      );
-    },
+    header: ({ column }) => <SortableHeader column={column} label="Cuotas" />,
   },
 
   {
     accessorKey: "amount",
-    header: "Amount",
+    header: ({ column }) => <SortableHeader column={column} label="Amount" />,
     cell: EditableCell,
     footer: ({ table }) => {
       const totalsByCurrency = table
@@ -164,8 +145,8 @@ export const columns: ColumnDef<Expense>[] = [
       );
     },
     meta: {
-      headerClassName: "text-right",
-      cellClassName: "text-right",
+      headerClassName: "w-24 whitespace-nowrap text-right",
+      cellClassName: "whitespace-nowrap text-right",
       footerClassName: "text-right font-medium",
       inputClassName: "w-full text-right",
       inputType: "text",
@@ -178,33 +159,21 @@ export const columns: ColumnDef<Expense>[] = [
   {
     accessorKey: "category",
     cell: SelectCell,
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Categoría
-          <ArrowUpDown className="ml-1 h-4 w-4" />
-        </Button>
-      );
+    meta: {
+      headerClassName: "w-24",
+      cellClassName: "whitespace-nowrap",
     },
+    header: ({ column }) => <SortableHeader column={column} label="Categoría" />,
   },
 
   {
     accessorKey: "usedByTarget",
     cell: SelectCell,
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Usó
-          <ArrowUpDown className="ml-1 h-4 w-4" />
-        </Button>
-      );
+    meta: {
+      headerClassName: "w-20",
+      cellClassName: "whitespace-nowrap",
     },
+    header: ({ column }) => <SortableHeader column={column} label="Usó" />,
   },
 
   {
@@ -217,7 +186,7 @@ export const columns: ColumnDef<Expense>[] = [
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
+            <Button variant="ghost" size="icon-xs" className="p-0">
               <span className="sr-only">Open menu</span>
               <MoreHorizontal className="h-4 w-4" />
             </Button>

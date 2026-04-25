@@ -19,6 +19,7 @@ export function SelectCell({ getValue, row, column, table }: CellContext<Expense
 
   return (
     <select
+      className="w-full min-w-0 bg-transparent text-sm"
       value={selectedValue}
       onChange={(e) => {
         const nextValue = e.target.value;

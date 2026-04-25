@@ -4,6 +4,8 @@
   "compilerOptions": {
     "paths": {
       "@/*": ["./src/*"],
+      "@better-auth-ui/react": ["./src/lib/better-auth-ui-react.ts"],
+      "@better-auth-ui/react/core": ["./node_modules/@better-auth-ui/react/dist/core.js"],
       "@server/*": ["../server/*"]
     }
   }
