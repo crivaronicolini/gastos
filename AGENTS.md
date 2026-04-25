@@ -1,3 +1,7 @@
+# Programming Guidelines
+
+DO NOT USE UseEffect UNLESS ABSOLUTELY NECESSARY. Rely on TanStack Query primitives.
+
 ## Database and Schemas
 
 `server/db/schema.ts` is the source of truth for database tables, inferred TypeScript
