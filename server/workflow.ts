@@ -48,7 +48,7 @@ export class ProcessFilesWorkflow extends WorkflowEntrypoint<Env, Params> {
       },
 
       async () => {
-        const response = (await this.env.AI.run("@cf/zai-org/glm-4.7-flash" as keyof AiModels, {
+        const response = (await this.env.AI.run("@cf/moonshotai/kimi-k2.5" as keyof AiModels, {
           temperature: 0.3,
           response_format: {
             type: "json_schema",

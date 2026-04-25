@@ -1,10 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import type { Expense } from "@server/db/schema";
 import * as React from "react";
 
 import { columns } from "@/expenses/columns";
 import { DataTable } from "@/expenses/data-table";
+import { EditableGroupTitle } from "@/expenses/editable-group-title";
+import { ExpensePeriodChart } from "@/expenses/expense-period-chart";
 import { UploadStatusBadge } from "@/expenses/upload-status-badge";
 import {
   activeWorkflowStatuses,
@@ -17,6 +20,10 @@ import { useUpdateExpense } from "@/expenses/use-update-expense";
 import { api } from "@/lib/api";
 import authClient from "@/lib/auth-client";
 
+type ExpensesSearch = {
+  period?: string;
+};
+
 export const Route = createFileRoute("/expenses")({
   beforeLoad: async () => {
     const session = await authClient.getSession();
@@ -25,6 +32,12 @@ export const Route = createFileRoute("/expenses")({
       throw redirect({ to: "/" });
     }
   },
+  validateSearch: (search: Record<string, unknown>): ExpensesSearch => ({
+    period:
+      typeof search.period === "string" && /^\d{4}-\d{2}$/.test(search.period)
+        ? search.period
+        : undefined,
+  }),
   component: Expenses,
 });
 
@@ -33,6 +46,12 @@ const SUCCESS_BADGE_TTL = 8_000;
 
 type UploadResponse = {
   uploads: Array<Omit<TrackedUpload, "status">>;
+};
+
+type ExpenseWithStatementPeriod = Expense & {
+  statementGroupId: number | null;
+  statementMonth: string | null;
+  statementOwnerId: number | null;
 };
 
 async function getAllCategroies() {
@@ -58,8 +77,49 @@ async function getAllExpenses() {
   if (!res.ok) {
     throw new Error("server error");
   }
-  const data = await res.json();
+  const data = (await res.json()) as { expenses: ExpenseWithStatementPeriod[] };
   return data;
+}
+
+function formatPeriodLabel(period: string, month: "short" | "long" = "short") {
+  return new Intl.DateTimeFormat("en-US", {
+    month,
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(new Date(`${period}-01T00:00:00Z`));
+}
+
+function getCurrentPeriod() {
+  return new Intl.DateTimeFormat("en-CA", {
+    month: "2-digit",
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(new Date());
+}
+
+function buildRollingPeriods(currentPeriod: string, monthsAfterCurrent = 1, totalMonths = 12) {
+  const [year, month] = currentPeriod.split("-").map(Number);
+  const currentIndex = totalMonths - monthsAfterCurrent - 1;
+  const start = new Date(Date.UTC(year, month - 1 - currentIndex, 1));
+
+  return Array.from({ length: totalMonths }, (_, index) => {
+    const date = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + index, 1));
+    const nextYear = date.getUTCFullYear();
+    const nextMonth = String(date.getUTCMonth() + 1).padStart(2, "0");
+    return `${nextYear}-${nextMonth}`;
+  });
+}
+
+function getGroupDisplayName(
+  group: {
+    members?: Array<{ user: { name: string } }>;
+    name?: string | null;
+  } | null,
+) {
+  if (!group) return "Expenses";
+
+  const fallbackName = (group.members ?? []).map((member) => member.user.name).join(" & ");
+  return group.name?.trim() || fallbackName || "Expenses";
 }
 
 function readStoredUploads() {
@@ -109,6 +169,8 @@ async function retryWorkflow(id: string) {
 
 export function Expenses() {
   const queryClient = useQueryClient();
+  const navigate = Route.useNavigate();
+  const search = Route.useSearch();
   const [draggingOwnerId, setDraggingOwnerId] = React.useState<number | null>(null);
 
   const categoriesQuery = useQuery({
@@ -309,20 +371,73 @@ export function Expenses() {
   const deleteExpenses = useDeleteExpenses();
   const insertRelativeExpense = useInsertRelativeExpense();
   const updateExpense = useUpdateExpense();
-  const expenses = (data?.expenses ?? []).map((expense) => ({
-    ...expense,
-    date: expense.date ? new Date(expense.date) : null,
-  }));
+  const currentPeriod = React.useMemo(() => getCurrentPeriod(), []);
+  const expenses = React.useMemo(
+    () =>
+      (data?.expenses ?? []).map((expense) => ({
+        ...expense,
+        date: expense.date ? new Date(expense.date) : null,
+      })),
+    [data?.expenses],
+  );
+  const groupExpenses = React.useMemo(
+    () => expenses.filter((expense) => expense.statementGroupId === currentGroup?.id),
+    [currentGroup?.id, expenses],
+  );
+  const selectedPeriod = search.period ?? currentPeriod;
+  const calendarPeriods = React.useMemo(() => buildRollingPeriods(currentPeriod), [currentPeriod]);
+  const filteredExpenses = React.useMemo(
+    () =>
+      groupExpenses.filter((expense) => expense.statementMonth === selectedPeriod),
+    [groupExpenses, selectedPeriod],
+  );
+  const chartData = React.useMemo(() => {
+    const totalsByPeriod = new Map<string, number>();
+
+    for (const expense of groupExpenses) {
+      if (!expense.statementMonth || expense.amount == null) continue;
+
+      totalsByPeriod.set(
+        expense.statementMonth,
+        (totalsByPeriod.get(expense.statementMonth) ?? 0) + Number(expense.amount),
+      );
+    }
+
+    return calendarPeriods.map((period) => ({
+        hasData: (totalsByPeriod.get(period) ?? 0) > 0,
+        label: formatPeriodLabel(period),
+        period,
+        total: totalsByPeriod.get(period) ?? 0,
+      }));
+  }, [calendarPeriods, groupExpenses]);
+  const chartCurrency = React.useMemo(() => {
+    const currencies = new Set(
+      groupExpenses
+        .map((expense) => expense.currency)
+        .filter((currency): currency is string => currency != null),
+    );
+
+    return currencies.size === 1 ? Array.from(currencies)[0] : null;
+  }, [groupExpenses]);
   const memberTables = statementOwners.map((user) => {
     const usageTarget = usageTargets.find((target) => target.user === user.id);
     return {
       user,
       usageTarget,
       expenses: usageTarget
-        ? expenses.filter((expense) => expense.usedByTarget === usageTarget.id)
+        ? filteredExpenses.filter((expense) => expense.usedByTarget === usageTarget.id)
         : [],
     };
   });
+
+  React.useEffect(() => {
+    if (search.period === selectedPeriod) return;
+
+    void navigate({
+      replace: true,
+      search: (prev) => ({ ...prev, period: selectedPeriod }),
+    });
+  }, [navigate, search.period, selectedPeriod]);
 
   React.useEffect(() => {
     window.localStorage.setItem(UPLOAD_STORAGE_KEY, JSON.stringify(trackedUploads));
@@ -414,13 +529,28 @@ export function Expenses() {
 
   if (error) return "An error has ocurred: " + error.message;
 
+  const groupTitle = getGroupDisplayName(currentGroup);
+
   return (
     <div className="container mx-auto space-y-4 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-semibold tracking-tight">
-          {currentGroup?.name ?? "Expenses"}
-        </h2>
+        <EditableGroupTitle
+          groupId={currentGroup?.id ?? null}
+          periodLabel={selectedPeriod ? formatPeriodLabel(selectedPeriod) : null}
+          title={groupTitle}
+        />
       </div>
+
+      <ExpensePeriodChart
+        currency={chartCurrency}
+        data={chartData}
+        selectedPeriod={selectedPeriod}
+        onPeriodSelect={(period) =>
+          void navigate({
+            search: (prev) => ({ ...prev, period }),
+          })
+        }
+      />
 
       <div className="grid gap-6 xl:grid-cols-2">
         {memberTables.map(({ expenses: userExpenses, usageTarget, user }) => (

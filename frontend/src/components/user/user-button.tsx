@@ -1,6 +1,6 @@
 "use client"
 
-import { useAuth, useSession, useSetActiveSession } from "@better-auth-ui/react"
+import { useAuth, useSession } from "@better-auth-ui/react"
 import {
   ChevronsUpDown,
   LogIn,
@@ -76,7 +76,6 @@ export function UserButton({
     appearance: { theme, setTheme, themes }
   } = useAuth()
 
-  const { isPending: settingActiveSession } = useSetActiveSession()
   const { data: session, isPending: sessionPending } = useSession()
 
   return (
@@ -96,8 +95,8 @@ export function UserButton({
             className={cn("py-2.5 h-auto font-normal", className)}
             size="lg"
           >
-            {session || sessionPending || settingActiveSession ? (
-              <UserView isPending={!!settingActiveSession} />
+            {session || sessionPending ? (
+              <UserView />
             ) : (
               <>
                 <UserAvatar />

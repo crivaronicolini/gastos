@@ -17,6 +17,7 @@ export function Providers({ children }: { children: ReactNode }) {
       authClient={authClient}
       appearance={{ theme, setTheme }}
       deleteUser={{ enabled: true }}
+      multiSession={false}
       socialProviders={["google"]}
       redirectTo="/dashboard"
       navigate={navigate}

@@ -52,14 +52,6 @@ function AppShell() {
         >
           Expenses
         </Link>
-        <Link
-          to="/create-expense"
-          activeProps={{
-            className: "font-bold",
-          }}
-        >
-          Create
-        </Link>
       </nav>
       <div className="justify-self-end">
         <UserButton size="icon" />

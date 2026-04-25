@@ -84,8 +84,15 @@ async function findOrCreateExtrasStatement(
 export const expenseRoute = new Hono<AppEnv>()
   .get("/", async (c) => {
     const db = c.get("db");
-    const rows = await db.select().from(expenses);
-    console.log(rows);
+    const rows = await db
+      .select({
+        ...expenses,
+        statementGroupId: statements.group,
+        statementMonth: statements.month,
+        statementOwnerId: statements.owner,
+      })
+      .from(expenses)
+      .leftJoin(statements, eq(expenses.statement, statements.id));
     return c.json({ expenses: rows });
   })
   .get("/total-spent", async (c) => {
