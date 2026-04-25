@@ -1,6 +1,6 @@
 import { defineRelations } from "drizzle-orm";
 import { int, integer, numeric, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-zod";
 import { z, toJSONSchema } from "zod";
 
 export const categories = sqliteTable("categories", {

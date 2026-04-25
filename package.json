@@ -7,22 +7,30 @@
     "start": "bun server/index.ts",
     "dev": "bun run --cwd frontend dev",
     "build": "bun run --cwd frontend build",
-    "deploy": "bun run --cwd frontend deploy"
+    "deploy": "bun run --cwd frontend deploy",
+    "auth:generate": "better-auth generate --config ./server/auth.ts --output ./server/db/auth.schema.ts -y && bun ./scripts/fix-auth-schema.mjs",
+    "db:generate": "drizzle-kit generate && bun run db:sync",
+    "db:sync": "bun ./scripts/sync-d1-migrations.mjs"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "^1.6.9",
     "@hono/zod-validator": "^0.7.6",
+    "better-auth": "^1.6.9",
+    "better-auth-cloudflare": "^0.3.0",
     "drizzle-orm": "^1.0.0-beta.21",
-    "hono": "^4.12.10",
+    "drizzle-zod": "^0.8.3",
+    "hono": "^4.12.15",
     "openai": "^6.34.0",
     "unpdf": "^1.6.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260414.1",
-    "@types/bun": "^1.3.12",
+    "@better-auth/cli": "^1.4.21",
+    "@cloudflare/workers-types": "^4.20260425.1",
+    "@types/bun": "^1.3.13",
     "drizzle-kit": "^1.0.0-beta.21"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.9.3"
   }
 }

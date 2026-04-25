@@ -1,4 +1,9 @@
+import { useSession } from "@better-auth-ui/react";
 import { Link, Outlet, createRootRoute } from "@tanstack/react-router";
+import { ThemeProvider } from "next-themes";
+
+import { Providers } from "@/components/providers";
+import { UserButton } from "@/components/user/user-button";
 // import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 
 export const Route = createRootRoute({
@@ -8,7 +13,28 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <>
-      <div className="p-2 flex gap-2 text-lg">
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <Providers>
+          <AppShell />
+          <Outlet />
+          {/* <TanStackRouterDevtools position="bottom-right" /> */}
+        </Providers>
+      </ThemeProvider>
+    </>
+  );
+}
+
+function AppShell() {
+  const { data: session } = useSession();
+
+  if (!session?.session) {
+    return null;
+  }
+
+  return (
+    <div className="mb-4 grid grid-cols-[1fr_auto_1fr] items-center border-b p-2 text-lg">
+      <div />
+      <nav className="flex items-center justify-center gap-4">
         <Link
           to="/"
           activeProps={{
@@ -17,14 +43,6 @@ function RootComponent() {
           activeOptions={{ exact: true }}
         >
           Home
-        </Link>{" "}
-        <Link
-          to="/about"
-          activeProps={{
-            className: "font-bold",
-          }}
-        >
-          About
         </Link>
         <Link
           to="/expenses"
@@ -42,10 +60,10 @@ function RootComponent() {
         >
           Create
         </Link>
+      </nav>
+      <div className="justify-self-end">
+        <UserButton size="icon" />
       </div>
-      <hr />
-      <Outlet />
-      {/* <TanStackRouterDevtools position="bottom-right" /> */}
-    </>
+    </div>
   );
 }

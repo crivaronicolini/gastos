@@ -3,7 +3,11 @@
   "name": "gastos",
   "main": "server/index.ts",
   "compatibility_date": "2026-04-15",
+  "compatibility_flags": ["nodejs_als"],
   "workers_dev": false,
+  "vars": {
+    "BETTER_AUTH_URL": "http://localhost:3000",
+  },
   "assets": {
     "binding": "ASSETS",
     "directory": "./frontend/dist/assets/",
@@ -15,7 +19,7 @@
       "binding": "DB",
       "database_name": "gastos-db",
       "database_id": "2af02b8f-c1d5-4c11-97ef-78daab8d818d",
-      "migrations_dir": "migrations",
+      "migrations_dir": "./drizzle/d1",
     },
   ],
   "workflows": [

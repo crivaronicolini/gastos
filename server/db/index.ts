@@ -1,4 +1,5 @@
 import { drizzle } from "drizzle-orm/d1";
+import * as authSchema from "./auth.schema";
 
 import {
   categories,
@@ -12,6 +13,7 @@ import {
 } from "./schema";
 
 const schema = {
+  ...authSchema,
   categories,
   expenses,
   groupMembers,

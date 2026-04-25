@@ -27,10 +27,29 @@ or inferred type from `server/db/schema.ts`.
 4. Add relations in the `relations` definition when the table connects to another
    table.
 5. Register the table in `server/db/index.ts` so Drizzle knows about it.
-6. Add a migration in `migrations/`.
+6. Run `bun run db:generate` to create and sync migrations.
 7. Update routes/workflows to validate with the exported Zod schemas, not with
    local casts.
 8. Run `bunx tsc --noEmit`.
+
+## Migrations
+
+This repo uses a split migration workflow:
+
+- `drizzle/migrations/` is Drizzle's nested internal history.
+- `drizzle/d1/` is the flattened Wrangler-ready SQL history.
+- `migrations/` is the legacy flat history and is still used as sync input.
+
+Use:
+
+- `bun run auth:generate` when Better Auth schema changes.
+- `bun run db:generate` after schema changes. This runs Drizzle generate and then
+  syncs flat D1 migrations.
+- `wrangler d1 migrations apply gastos-db --local`
+- `wrangler d1 migrations apply gastos-db --remote`
+
+Do not point Wrangler at `drizzle/migrations/` directly. Keep the Drizzle
+baseline folder in `drizzle/migrations/`; future diffs depend on it.
 
 ## Adding a Non-Table Payload Schema
 

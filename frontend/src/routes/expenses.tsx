@@ -1,22 +1,30 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import * as React from "react";
 
 import { columns } from "@/expenses/columns";
 import { DataTable } from "@/expenses/data-table";
-import { useDeleteExpenses } from "@/expenses/use-delete-expenses";
-import { useInsertRelativeExpense } from "@/expenses/use-insert-relative-expense";
 import { UploadStatusBadge } from "@/expenses/upload-status-badge";
 import {
   activeWorkflowStatuses,
   type TrackedUpload,
   type WorkflowStatusResponse,
 } from "@/expenses/upload-tracking";
+import { useDeleteExpenses } from "@/expenses/use-delete-expenses";
+import { useInsertRelativeExpense } from "@/expenses/use-insert-relative-expense";
 import { useUpdateExpense } from "@/expenses/use-update-expense";
 import { api } from "@/lib/api";
+import authClient from "@/lib/auth-client";
 
 export const Route = createFileRoute("/expenses")({
+  beforeLoad: async () => {
+    const session = await authClient.getSession();
+
+    if (!session.data?.session) {
+      throw redirect({ to: "/" });
+    }
+  },
   component: Expenses,
 });
 
@@ -159,7 +167,7 @@ export function Expenses() {
         ...upload,
         completedAt:
           nextStatus.status === "complete"
-            ? upload.completedAt ?? workflowStatusesQuery.dataUpdatedAt
+            ? (upload.completedAt ?? workflowStatusesQuery.dataUpdatedAt)
             : undefined,
         error: nextStatus.error ?? null,
         status: nextStatus.status,
@@ -229,9 +237,7 @@ export function Expenses() {
     },
     onSuccess: (payload, _variables, context) => {
       queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) => [
-        ...current.filter(
-          (upload) => !context?.optimisticWorkflowIds.includes(upload.workflowId),
-        ),
+        ...current.filter((upload) => !context?.optimisticWorkflowIds.includes(upload.workflowId)),
         ...payload.uploads.map((upload) => ({
           ...upload,
           status: "queued" as const,
@@ -366,9 +372,7 @@ export function Expenses() {
     queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) =>
       current.filter(
         (upload) =>
-          !uploadsToDismiss.some(
-            (dismissUpload) => dismissUpload.workflowId === upload.workflowId,
-          ),
+          !uploadsToDismiss.some((dismissUpload) => dismissUpload.workflowId === upload.workflowId),
       ),
     );
   }
