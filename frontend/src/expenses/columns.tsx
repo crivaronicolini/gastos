@@ -26,6 +26,7 @@ import { MoreHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 
 import type { SelectCellOption } from "./select-cell.tsx";
 
@@ -79,7 +80,7 @@ export const columns: ColumnDef<Expense>[] = [
   {
     accessorKey: "origin",
     meta: {
-      headerClassName: "w-20",
+      headerClassName: "w-18",
       cellClassName: "break-words",
       inputClassName: "w-full min-w-0 bg-transparent text-sm",
     },
@@ -104,29 +105,20 @@ export const columns: ColumnDef<Expense>[] = [
   {
     accessorKey: "title",
     meta: {
-      headerClassName: "w-[22%]",
-      cellClassName: "break-words",
+      headerClassName: "w-auto",
+      cellClassName: "w-auto break-words",
       inputClassName: "w-full min-w-0 bg-transparent text-sm",
     },
     header: ({ column }) => <SortableHeader column={column} label="Nombre" />,
   },
-
-  {
-    accessorKey: "installments",
-    footer: () => "Total",
-    meta: {
-      headerClassName: "w-16 whitespace-nowrap",
-      cellClassName: "whitespace-nowrap",
-      footerClassName: "font-medium whitespace-nowrap",
-      inputClassName: "w-full min-w-0 bg-transparent text-sm",
-    },
-    header: ({ column }) => <SortableHeader column={column} label="Cuotas" />,
-  },
-
   {
     accessorKey: "amount",
     header: ({ column }) => <SortableHeader column={column} label="Amount" />,
-    cell: EditableCell,
+    cell: (context) => (
+      <div className={cn(context.row.original.currency === "USD" && "text-green-600")}>
+        <EditableCell {...context} />
+      </div>
+    ),
     footer: ({ table }) => {
       const totalsByCurrency = table
         .getRowModel()
@@ -157,10 +149,22 @@ export const columns: ColumnDef<Expense>[] = [
   },
 
   {
+    accessorKey: "installments",
+    footer: () => "Total",
+    meta: {
+      headerClassName: "w-20 whitespace-nowrap text-right",
+      cellClassName: "whitespace-nowrap text-right",
+      footerClassName: "font-medium whitespace-nowrap",
+      inputClassName: "w-full min-w-0 bg-transparent text-sm text-right",
+    },
+    header: ({ column }) => <SortableHeader column={column} label="Cuotas" />,
+  },
+
+  {
     accessorKey: "category",
     cell: SelectCell,
     meta: {
-      headerClassName: "w-24",
+      headerClassName: "w-28",
       cellClassName: "whitespace-nowrap",
     },
     header: ({ column }) => <SortableHeader column={column} label="Categoría" />,
@@ -195,12 +199,16 @@ export const columns: ColumnDef<Expense>[] = [
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onSelect={() => void table.options.meta?.insertRelativeExpense(row.original.id, "above")}
+              onSelect={() =>
+                void table.options.meta?.insertRelativeExpense(row.original.id, "above")
+              }
             >
               Add row above
             </DropdownMenuItem>
             <DropdownMenuItem
-              onSelect={() => void table.options.meta?.insertRelativeExpense(row.original.id, "below")}
+              onSelect={() =>
+                void table.options.meta?.insertRelativeExpense(row.original.id, "below")
+              }
             >
               Add row below
             </DropdownMenuItem>

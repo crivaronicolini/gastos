@@ -1,7 +1,8 @@
+import type { Expense } from "@server/db/schema";
+
 /* eslint-disable react-refresh/only-export-components */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import type { Expense } from "@server/db/schema";
 import * as React from "react";
 
 import { columns } from "@/expenses/columns";
@@ -387,8 +388,7 @@ export function Expenses() {
   const selectedPeriod = search.period ?? currentPeriod;
   const calendarPeriods = React.useMemo(() => buildRollingPeriods(currentPeriod), [currentPeriod]);
   const filteredExpenses = React.useMemo(
-    () =>
-      groupExpenses.filter((expense) => expense.statementMonth === selectedPeriod),
+    () => groupExpenses.filter((expense) => expense.statementMonth === selectedPeriod),
     [groupExpenses, selectedPeriod],
   );
   const chartData = React.useMemo(() => {
@@ -404,11 +404,11 @@ export function Expenses() {
     }
 
     return calendarPeriods.map((period) => ({
-        hasData: (totalsByPeriod.get(period) ?? 0) > 0,
-        label: formatPeriodLabel(period),
-        period,
-        total: totalsByPeriod.get(period) ?? 0,
-      }));
+      hasData: (totalsByPeriod.get(period) ?? 0) > 0,
+      label: formatPeriodLabel(period),
+      period,
+      total: totalsByPeriod.get(period) ?? 0,
+    }));
   }, [calendarPeriods, groupExpenses]);
   const chartCurrency = React.useMemo(() => {
     const currencies = new Set(
@@ -532,7 +532,7 @@ export function Expenses() {
   const groupTitle = getGroupDisplayName(currentGroup);
 
   return (
-    <div className="container mx-auto space-y-4 p-5">
+    <div className="mx-auto w-full max-w-screen-3xl space-y-4 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <EditableGroupTitle
           groupId={currentGroup?.id ?? null}
