@@ -39,6 +39,7 @@ import {
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu.tsx";
 import { EditableCell } from "./editable-cell.tsx";
+import { parseAmountInput } from "./parse-amount-input.ts";
 import { SelectCell } from "./select-cell.tsx";
 import { SortableHeader } from "./sortable-header.tsx";
 
@@ -47,6 +48,11 @@ function formatCurrency(amount: number, currency: string) {
     style: "currency",
     currency,
   }).format(amount);
+}
+
+function formatAmountValue(amount: number, currency: string) {
+  const formatted = formatCurrency(amount, currency);
+  return currency === "USD" ? `${formatted} USD` : formatted;
 }
 
 export const defaultColumn: Partial<ColumnDef<Expense>> = {
@@ -143,8 +149,10 @@ export const columns: ColumnDef<Expense>[] = [
       inputClassName: "w-full text-right",
       inputType: "text",
       inputMode: "decimal",
-      formatValue: (value: unknown, row?: Expense) =>
-        formatCurrency(Number(value), row?.currency ?? "ARS"),
+      formatValue: (value: unknown, row?: Expense) => {
+        const parsed = parseAmountInput(value);
+        return formatAmountValue(parsed.amount, parsed.currency ?? row?.currency ?? "ARS");
+      },
     },
   },
 

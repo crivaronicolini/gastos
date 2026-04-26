@@ -9,6 +9,7 @@ import { columns } from "@/expenses/columns";
 import { DataTable } from "@/expenses/data-table";
 import { EditableGroupTitle } from "@/expenses/editable-group-title";
 import { ExpensePeriodChart } from "@/expenses/expense-period-chart";
+import { parseAmountInput } from "@/expenses/parse-amount-input";
 import { UploadStatusBadge } from "@/expenses/upload-status-badge";
 import {
   activeWorkflowStatuses,
@@ -493,17 +494,28 @@ export function Expenses() {
   }
 
   function updateExpenseData(expenseId: number, columnId: string, value: unknown) {
+    if (columnId === "amount") {
+      const { amount, currency } = parseAmountInput(value);
+
+      updateExpense.mutate({
+        id: expenseId,
+        patch: {
+          amount,
+          ...(currency ? { currency } : {}),
+        },
+      });
+      return;
+    }
+
     updateExpense.mutate({
       id: expenseId,
       patch: {
         [columnId]:
-          columnId === "amount"
-            ? Number(value)
-            : columnId === "category" || columnId === "usedByTarget"
-              ? value == null
-                ? null
-                : Number(value)
-              : value,
+          columnId === "category" || columnId === "usedByTarget"
+            ? value == null
+              ? null
+              : Number(value)
+            : value,
       },
     });
   }
