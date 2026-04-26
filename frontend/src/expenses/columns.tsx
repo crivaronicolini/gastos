@@ -55,6 +55,21 @@ function formatAmountValue(amount: number, currency: string) {
   return currency === "USD" ? `${formatted} USD` : formatted;
 }
 
+function formatDateValue(value: unknown) {
+  if (!value) return "";
+
+  const date = new Date(value as string | number);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const currentYear = new Date().getFullYear();
+  return new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    ...(date.getUTCFullYear() === currentYear ? {} : { year: "numeric" }),
+    timeZone: "UTC",
+  }).format(date);
+}
+
 export const defaultColumn: Partial<ColumnDef<Expense>> = {
   cell: EditableCell,
 };
@@ -96,14 +111,11 @@ export const columns: ColumnDef<Expense>[] = [
   {
     accessorKey: "date",
     meta: {
-      headerClassName: "w-24 whitespace-nowrap",
+      headerClassName: "w-32 whitespace-nowrap",
       cellClassName: "whitespace-nowrap",
-      inputClassName: "w-full min-w-0 bg-transparent text-sm",
+      inputClassName: "w-full min-w-0 bg-transparent text-sm text-left",
       inputType: "date",
-      formatValue: (value: unknown) => {
-        if (!value) return "";
-        return new Date(value as string | number).toISOString().slice(0, 10);
-      },
+      formatValue: formatDateValue,
     },
     header: ({ column }) => <SortableHeader column={column} label="Fecha" />,
   },
@@ -191,8 +203,8 @@ export const columns: ColumnDef<Expense>[] = [
   {
     id: "actions",
     meta: {
-      headerClassName: "w-8",
-      cellClassName: "w-8 whitespace-nowrap",
+      headerClassName: "w-10",
+      cellClassName: "w-10 whitespace-nowrap",
     },
     cell: ({ row, table }) => {
       return (
