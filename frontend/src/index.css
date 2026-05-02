@@ -3,6 +3,10 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
+@source "../node_modules/@tremor/react/dist/**/*.{js,cjs,mjs,ts,tsx,jsx}";
+@source inline("fill-blue-500 fill-cyan-500 fill-sky-500 fill-indigo-500 fill-violet-500 fill-purple-500 fill-fuchsia-500 fill-slate-500 fill-gray-500 fill-zinc-500 fill-neutral-500 fill-stone-500 fill-red-500 fill-orange-500 fill-amber-500 fill-yellow-500 fill-lime-500 fill-green-500 fill-emerald-500 fill-teal-500 fill-pink-500 fill-rose-500 stroke-blue-500 stroke-cyan-500 stroke-sky-500 stroke-indigo-500 stroke-violet-500 stroke-purple-500 stroke-fuchsia-500 stroke-slate-500 stroke-gray-500 stroke-zinc-500 stroke-neutral-500 stroke-stone-500 stroke-red-500 stroke-orange-500 stroke-amber-500 stroke-yellow-500 stroke-lime-500 stroke-green-500 stroke-emerald-500 stroke-teal-500 stroke-pink-500 stroke-rose-500");
+@source inline("fill-tremor-content fill-tremor-content-emphasis stroke-tremor-background stroke-tremor-border text-tremor-default text-tremor-label bg-tremor-background bg-tremor-background-emphasis bg-tremor-background-muted bg-tremor-background-subtle text-tremor-content text-tremor-content-emphasis text-tremor-content-strong text-tremor-content-subtle text-tremor-content-inverted text-tremor-brand text-tremor-brand-emphasis text-tremor-brand-faint text-tremor-brand-muted text-tremor-brand-subtle text-tremor-brand-inverted text-tremor-title text-tremor-metric dark:fill-dark-tremor-content dark:fill-dark-tremor-content-emphasis dark:stroke-dark-tremor-background dark:stroke-dark-tremor-border dark:text-dark-tremor-default dark:text-dark-tremor-label dark:bg-dark-tremor-background dark:bg-dark-tremor-background-emphasis dark:bg-dark-tremor-background-muted dark:bg-dark-tremor-background-subtle dark:text-dark-tremor-content dark:text-dark-tremor-content-emphasis dark:text-dark-tremor-content-strong dark:text-dark-tremor-content-subtle dark:text-dark-tremor-content-inverted dark:text-dark-tremor-brand dark:text-dark-tremor-brand-emphasis dark:text-dark-tremor-brand-faint dark:text-dark-tremor-brand-muted dark:text-dark-tremor-brand-subtle dark:text-dark-tremor-brand-inverted dark:text-dark-tremor-title dark:text-dark-tremor-metric");
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -29,6 +33,46 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-tremor-background: var(--background);
+  --color-tremor-background-emphasis: var(--secondary);
+  --color-tremor-background-muted: var(--muted);
+  --color-tremor-background-subtle: var(--accent);
+  --color-tremor-border: var(--border);
+  --color-tremor-content: var(--foreground);
+  --color-tremor-content-emphasis: var(--foreground);
+  --color-tremor-content-strong: var(--foreground);
+  --color-tremor-content-subtle: var(--muted-foreground);
+  --color-tremor-content-inverted: var(--background);
+  --color-tremor-default: var(--foreground);
+  --color-tremor-label: var(--muted-foreground);
+  --color-tremor-brand: var(--primary);
+  --color-tremor-brand-emphasis: var(--primary);
+  --color-tremor-brand-faint: var(--secondary);
+  --color-tremor-brand-muted: var(--muted);
+  --color-tremor-brand-subtle: var(--accent);
+  --color-tremor-brand-inverted: var(--primary-foreground);
+  --color-tremor-title: var(--foreground);
+  --color-tremor-metric: var(--foreground);
+  --color-dark-tremor-background: var(--background);
+  --color-dark-tremor-background-emphasis: var(--secondary);
+  --color-dark-tremor-background-muted: var(--muted);
+  --color-dark-tremor-background-subtle: var(--accent);
+  --color-dark-tremor-border: var(--border);
+  --color-dark-tremor-content: var(--foreground);
+  --color-dark-tremor-content-emphasis: var(--foreground);
+  --color-dark-tremor-content-strong: var(--foreground);
+  --color-dark-tremor-content-subtle: var(--muted-foreground);
+  --color-dark-tremor-content-inverted: var(--background);
+  --color-dark-tremor-default: var(--foreground);
+  --color-dark-tremor-label: var(--muted-foreground);
+  --color-dark-tremor-brand: var(--primary);
+  --color-dark-tremor-brand-emphasis: var(--primary);
+  --color-dark-tremor-brand-faint: var(--secondary);
+  --color-dark-tremor-brand-muted: var(--muted);
+  --color-dark-tremor-brand-subtle: var(--accent);
+  --color-dark-tremor-brand-inverted: var(--primary-foreground);
+  --color-dark-tremor-title: var(--foreground);
+  --color-dark-tremor-metric: var(--foreground);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
