@@ -3,6 +3,7 @@ import "@glideapps/glide-data-grid-cells/dist/index.css";
 import "./data-table.css";
 
 import {
+  CompactSelection,
   DataEditor,
   GridCellKind,
   type CustomCell,
@@ -10,6 +11,7 @@ import {
   type EditableGridCell,
   type GridCell,
   type GridColumn,
+  type GridSelection,
   type Item,
   type Theme,
 } from "@glideapps/glide-data-grid";
@@ -102,6 +104,13 @@ const GRID_THEME: Partial<Theme> = {
   textLight: "oklch(0.708 0 0)",
   textMedium: "oklch(0.708 0 0)",
 };
+
+const EMPTY_SELECTION: GridSelection = {
+  columns: CompactSelection.empty(),
+  rows: CompactSelection.empty(),
+};
+
+let activeSearchTableId: string | null = null;
 
 function isSortableColumn(columnId: DisplayColumnId): columnId is SortableColumnId {
   return SORTABLE_COLUMNS.has(columnId);
@@ -237,6 +246,34 @@ function sortExpenses(expenses: Expense[], sort: SortState, selectOptions: Recor
   });
 }
 
+function getSearchText(expense: Expense, selectOptions: Record<string, SelectCellOption[]>) {
+  return [
+    expense.origin,
+    expense.title,
+    expense.currency,
+    expense.amount,
+    expense.installments,
+    formatDateValue(expense.date),
+    toDateTextValue(expense.date),
+    getSelectDisplay(expense.category, selectOptions.category ?? []),
+    getSelectDisplay(expense.usedByTarget, selectOptions.usedByTarget ?? []),
+  ]
+    .filter((value) => value != null && value !== "")
+    .join(" ")
+    .toLowerCase();
+}
+
+function filterExpenses(
+  expenses: Expense[],
+  searchValue: string,
+  selectOptions: Record<string, SelectCellOption[]>,
+) {
+  const query = searchValue.trim().toLowerCase();
+  if (!query) return expenses;
+
+  return expenses.filter((expense) => getSearchText(expense, selectOptions).includes(query));
+}
+
 function formatTitle(columnId: DisplayColumnId, sort: SortState) {
   const label = COLUMN_LABELS[columnId];
   if (!sort || sort.column !== columnId) return label;
@@ -297,18 +334,41 @@ export function DataTable({
   selectOptions,
   onUpdateData,
 }: DataTableProps) {
+  const tableId = React.useId();
   const gridRef = React.useRef<DataEditorRef>(null);
   const [containerRef, containerWidth] = useElementWidth();
   const [sort, setSort] = React.useState<SortState>(null);
+  const [showSearch, setShowSearch] = React.useState(false);
+  const [searchValue, setSearchValue] = React.useState("");
+  const [selection, setSelection] = React.useState<GridSelection>(EMPTY_SELECTION);
   const [actionMenu, setActionMenu] = React.useState<{
     expenseId: number;
     left: number;
     top: number;
   } | null>(null);
 
+  React.useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (activeSearchTableId !== tableId) return;
+
+      if ((event.ctrlKey || event.metaKey) && event.code === "KeyF") {
+        setShowSearch((current) => !current);
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+  }, [tableId]);
+
+  const filteredData = React.useMemo(
+    () => filterExpenses(data, searchValue, selectOptions),
+    [data, searchValue, selectOptions],
+  );
   const sortedData = React.useMemo(
-    () => sortExpenses(data, sort, selectOptions),
-    [data, selectOptions, sort],
+    () => sortExpenses(filteredData, sort, selectOptions),
+    [filteredData, selectOptions, sort],
   );
   const gridColumns = React.useMemo(() => computeColumns(containerWidth, sort), [containerWidth, sort]);
   const hasRows = sortedData.length > 0;
@@ -319,7 +379,14 @@ export function DataTable({
     ([columnIndex, rowIndex]: Item): GridCell => {
       if (!hasRows) {
         return columnIndex === 2 && rowIndex === 0
-          ? makeTextCell("Drag you credit card statement here to begin!", undefined, "center", true)
+          ? makeTextCell(
+              searchValue.trim()
+                ? "No expenses match your search."
+                : "Drag you credit card statement here to begin!",
+              undefined,
+              "center",
+              true,
+            )
           : makeTextCell("", undefined, "left", true);
       }
 
@@ -377,7 +444,7 @@ export function DataTable({
           return makeTextCell(String(expense[columnId] ?? ""));
       }
     },
-    [footerRow, hasRows, selectOptions, sortedData],
+    [footerRow, hasRows, searchValue, selectOptions, sortedData],
   );
 
   const onHeaderClicked = React.useCallback((columnIndex: number) => {
@@ -436,7 +503,16 @@ export function DataTable({
   }
 
   return (
-    <div ref={containerRef} className="overflow-hidden rounded-md border bg-background">
+    <div
+      ref={containerRef}
+      className="overflow-hidden rounded-md border bg-background"
+      onFocusCapture={() => {
+        activeSearchTableId = tableId;
+      }}
+      onPointerDownCapture={() => {
+        activeSearchTableId = tableId;
+      }}
+    >
       <div className="relative">
         <DataEditor
           ref={gridRef}
@@ -446,13 +522,20 @@ export function DataTable({
           fillHandle={false}
           getCellContent={getCellContent}
           getCellsForSelection
+          gridSelection={selection}
           headerHeight={36}
           height={getGridHeight(rowCount)}
           keybindings={{ search: false }}
           minColumnWidth={24}
           onCellClicked={onCellClicked}
           onCellEdited={onCellEdited}
+          onGridSelectionChange={setSelection}
           onHeaderClicked={onHeaderClicked}
+          onSearchClose={() => {
+            setShowSearch(false);
+            setSearchValue("");
+          }}
+          onSearchValueChange={setSearchValue}
           rangeSelect="none"
           rowHeight={34}
           rowMarkers={{
@@ -463,6 +546,9 @@ export function DataTable({
             },
           }}
           rows={rowCount}
+          searchResults={[]}
+          searchValue={searchValue}
+          showSearch={showSearch}
           smoothScrollX
           smoothScrollY
           theme={GRID_THEME}
