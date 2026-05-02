@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import * as React from "react";
 
-import { columns } from "@/expenses/columns";
 import { DataTable } from "@/expenses/data-table";
 import { EditableGroupTitle } from "@/expenses/editable-group-title";
 import { ExpensePeriodChart } from "@/expenses/expense-period-chart";
@@ -16,7 +15,6 @@ import {
   type TrackedUpload,
   type WorkflowStatusResponse,
 } from "@/expenses/upload-tracking";
-import { useDeleteExpenses } from "@/expenses/use-delete-expenses";
 import { useInsertRelativeExpense } from "@/expenses/use-insert-relative-expense";
 import { useUpdateExpense } from "@/expenses/use-update-expense";
 import { api } from "@/lib/api";
@@ -370,7 +368,6 @@ export function Expenses() {
     },
   });
 
-  const deleteExpenses = useDeleteExpenses();
   const insertRelativeExpense = useInsertRelativeExpense();
   const updateExpense = useUpdateExpense();
   const currentPeriod = React.useMemo(() => getCurrentPeriod(), []);
@@ -520,10 +517,6 @@ export function Expenses() {
     });
   }
 
-  async function deleteSelectedExpenses(expenseIds: number[]) {
-    await deleteExpenses.mutateAsync(expenseIds);
-  }
-
   async function addRelativeExpense(
     anchorExpenseId: number,
     ownerId: number,
@@ -606,13 +599,10 @@ export function Expenses() {
                 </div>
               )}
               <DataTable
-                columns={columns}
                 data={userExpenses}
-                isDeletingExpenses={deleteExpenses.isPending}
                 onInsertRelativeExpense={(anchorExpenseId, position) =>
                   addRelativeExpense(anchorExpenseId, user.id, position)
                 }
-                onDeleteExpenses={deleteSelectedExpenses}
                 selectOptions={{
                   category: categoriesQuery.data?.categories ?? [],
                   usedByTarget: usageTargets,

@@ -1,154 +1,497 @@
+import "@glideapps/glide-data-grid/dist/index.css";
+import "@glideapps/glide-data-grid-cells/dist/index.css";
+import "./data-table.css";
+
 import {
-  type ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  type RowSelectionState,
-  getSortedRowModel,
-  type SortingState,
-  useReactTable,
-} from "@tanstack/react-table";
+  DataEditor,
+  GridCellKind,
+  type CustomCell,
+  type DataEditorRef,
+  type EditableGridCell,
+  type GridCell,
+  type GridColumn,
+  type Item,
+  type Theme,
+} from "@glideapps/glide-data-grid";
+import { DropdownCell, type DropdownCellType } from "@glideapps/glide-data-grid-cells";
+import type { Expense } from "@server/db/schema";
 import * as React from "react";
 
-import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableFooter,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { parseAmountInput } from "./parse-amount-input.ts";
+import type { SelectCellOption } from "./select-cell.tsx";
 
 interface DataTableProps {
-  columns: ColumnDef<Expense>[];
   data: Expense[];
   onInsertRelativeExpense: (anchorExpenseId: number, position: "above" | "below") => Promise<void>;
   selectOptions: Record<string, SelectCellOption[]>;
   onUpdateData: (expenseId: number, columnId: string, value: unknown) => void;
-  onDeleteExpenses: (expenseIds: number[]) => Promise<void>;
-  isDeletingExpenses?: boolean;
 }
 
-import type { Expense } from "@server/db/schema";
+type SortableColumnId =
+  | "origin"
+  | "date"
+  | "title"
+  | "amount"
+  | "installments"
+  | "category"
+  | "usedByTarget";
 
-import type { SelectCellOption } from "./select-cell.tsx";
+type DisplayColumnId = SortableColumnId | "actions";
 
-import { defaultColumn } from "./columns.tsx";
+type SortState = {
+  column: SortableColumnId;
+  direction: "asc" | "desc";
+} | null;
+
+const SORTABLE_COLUMNS = new Set<DisplayColumnId>([
+  "origin",
+  "date",
+  "title",
+  "amount",
+  "installments",
+  "category",
+  "usedByTarget",
+]);
+
+const COLUMN_IDS: DisplayColumnId[] = [
+  "origin",
+  "date",
+  "title",
+  "amount",
+  "installments",
+  "category",
+  "usedByTarget",
+  "actions",
+];
+
+const COLUMN_LABELS: Record<DisplayColumnId, string> = {
+  actions: "",
+  amount: "Amount",
+  category: "Categoría",
+  date: "Fecha",
+  installments: "Cuotas",
+  origin: "Origen",
+  title: "Nombre",
+  usedByTarget: "Usó",
+};
+
+const BASE_COLUMN_WIDTHS: Record<DisplayColumnId, number> = {
+  actions: 38,
+  amount: 104,
+  category: 96,
+  date: 86,
+  installments: 64,
+  origin: 62,
+  title: 180,
+  usedByTarget: 74,
+};
+
+const GRID_THEME: Partial<Theme> = {
+  accentColor: "oklch(0.708 0 0)",
+  accentFg: "oklch(0.145 0 0)",
+  accentLight: "oklch(0.269 0 0)",
+  bgCell: "oklch(0.145 0 0)",
+  bgCellMedium: "oklch(0.269 0 0)",
+  bgHeader: "oklch(0.205 0 0)",
+  bgHeaderHasFocus: "oklch(0.269 0 0)",
+  bgHeaderHovered: "oklch(0.269 0 0)",
+  borderColor: "oklch(1 0 0 / 10%)",
+  textDark: "oklch(0.985 0 0)",
+  textHeader: "oklch(0.985 0 0)",
+  textHeaderSelected: "oklch(0.145 0 0)",
+  textLight: "oklch(0.708 0 0)",
+  textMedium: "oklch(0.708 0 0)",
+};
+
+function isSortableColumn(columnId: DisplayColumnId): columnId is SortableColumnId {
+  return SORTABLE_COLUMNS.has(columnId);
+}
+
+function formatCurrency(amount: number, currency: string) {
+  return new Intl.NumberFormat(currency === "USD" ? "en-US" : "es-AR", {
+    currency,
+    style: "currency",
+  }).format(amount);
+}
+
+function formatDateValue(value: unknown) {
+  if (!value) return "";
+
+  const date = new Date(value as string | number);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const currentYear = new Date().getFullYear();
+  return new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    ...(date.getUTCFullYear() === currentYear ? {} : { year: "numeric" }),
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function toDateTextValue(value: unknown) {
+  if (!value) return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const date = new Date(value as string | number);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
+function getSelectDisplay(value: unknown, options: SelectCellOption[]) {
+  if (value == null || value === "") return "";
+  const selected = options.find((option) => String(option.id) === String(value));
+  return selected?.name ?? String(value);
+}
+
+function makeTextCell(
+  data: string,
+  displayData = data,
+  align: GridCell["contentAlign"] = "left",
+  readonly = false,
+): GridCell {
+  return {
+    allowOverlay: !readonly,
+    contentAlign: align,
+    copyData: data,
+    data,
+    displayData,
+    kind: GridCellKind.Text,
+    readonly,
+  };
+}
+
+function makeFooterCell(data: string, align: GridCell["contentAlign"] = "left"): GridCell {
+  return {
+    ...makeTextCell(data, undefined, align, true),
+    themeOverride: {
+      bgCell: "oklch(0.205 0 0)",
+      textDark: "oklch(0.985 0 0)",
+    },
+  };
+}
+
+function makeActionCell(): GridCell {
+  return {
+    allowOverlay: false,
+    contentAlign: "center",
+    copyData: "",
+    data: "...",
+    displayData: "...",
+    kind: GridCellKind.Text,
+    readonly: true,
+  };
+}
+
+function makeSelectCell(value: unknown, options: SelectCellOption[], readonly = false): DropdownCellType {
+  const stringValue = value == null ? "" : String(value);
+  const display = getSelectDisplay(value, options);
+
+  return {
+    allowOverlay: !readonly,
+    copyData: display,
+    data: {
+      allowedValues: [
+        { label: "None", value: "" },
+        ...options.map((option) => ({ label: option.name, value: String(option.id) })),
+      ],
+      kind: "dropdown-cell",
+      value: stringValue,
+    },
+    kind: GridCellKind.Custom,
+    readonly,
+  };
+}
+
+function isDropdownCell(cell: CustomCell): cell is DropdownCellType {
+  return "kind" in cell.data && cell.data.kind === "dropdown-cell";
+}
+
+function compareValues(a: unknown, b: unknown) {
+  if (a == null && b == null) return 0;
+  if (a == null) return -1;
+  if (b == null) return 1;
+
+  if (a instanceof Date || b instanceof Date) {
+    return new Date(a as string | number | Date).getTime() - new Date(b as string | number | Date).getTime();
+  }
+
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+}
+
+function sortExpenses(expenses: Expense[], sort: SortState, selectOptions: Record<string, SelectCellOption[]>) {
+  if (!sort) return expenses;
+
+  return [...expenses].sort((first, second) => {
+    const firstValue =
+      sort.column === "category" || sort.column === "usedByTarget"
+        ? getSelectDisplay(first[sort.column], selectOptions[sort.column] ?? [])
+        : first[sort.column];
+    const secondValue =
+      sort.column === "category" || sort.column === "usedByTarget"
+        ? getSelectDisplay(second[sort.column], selectOptions[sort.column] ?? [])
+        : second[sort.column];
+
+    const result = compareValues(firstValue, secondValue);
+    return sort.direction === "asc" ? result : -result;
+  });
+}
+
+function formatTitle(columnId: DisplayColumnId, sort: SortState) {
+  const label = COLUMN_LABELS[columnId];
+  if (!sort || sort.column !== columnId) return label;
+  return `${label} ${sort.direction === "asc" ? "↑" : "↓"}`;
+}
+
+function computeColumns(containerWidth: number, sort: SortState): GridColumn[] {
+  const width = Math.max(containerWidth - 34, 192);
+  const fixedColumnWidth = COLUMN_IDS.filter((id) => id !== "title").reduce(
+    (total, id) => total + BASE_COLUMN_WIDTHS[id],
+    0,
+  );
+  const titleWidth = Math.max(80, width - fixedColumnWidth);
+  const naturalWidth = fixedColumnWidth + titleWidth;
+  const scale = naturalWidth > width ? width / naturalWidth : 1;
+  const scaledWidths = COLUMN_IDS.map((id) =>
+    Math.max(24, Math.floor((id === "title" ? titleWidth : BASE_COLUMN_WIDTHS[id]) * scale)),
+  );
+  const scaledTotal = scaledWidths.reduce((total, columnWidth) => total + columnWidth, 0);
+  const adjustment = Math.floor(width) - scaledTotal;
+  const titleIndex = COLUMN_IDS.indexOf("title");
+  scaledWidths[titleIndex] = Math.max(24, scaledWidths[titleIndex] + adjustment);
+
+  return COLUMN_IDS.map((id, index) => ({
+    id,
+    title: formatTitle(id, sort),
+    width: scaledWidths[index],
+  }));
+}
+
+function getGridHeight(rowCount: number) {
+  const rows = Math.max(rowCount, 2);
+  return Math.min(560, 36 + rows * 34 + 2);
+}
+
+function useElementWidth() {
+  const [element, setElement] = React.useState<HTMLDivElement | null>(null);
+  const [width, setWidth] = React.useState(0);
+
+  React.useLayoutEffect(() => {
+    if (!element) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      setWidth(entry?.contentRect.width ?? 0);
+    });
+    observer.observe(element);
+    setWidth(element.getBoundingClientRect().width);
+
+    return () => observer.disconnect();
+  }, [element]);
+
+  return [setElement, width] as const;
+}
 
 export function DataTable({
-  columns,
   data,
   onInsertRelativeExpense,
   selectOptions,
   onUpdateData,
-  onDeleteExpenses,
-  isDeletingExpenses = false,
 }: DataTableProps) {
-  const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
+  const gridRef = React.useRef<DataEditorRef>(null);
+  const [containerRef, containerWidth] = useElementWidth();
+  const [sort, setSort] = React.useState<SortState>(null);
+  const [actionMenu, setActionMenu] = React.useState<{
+    expenseId: number;
+    left: number;
+    top: number;
+  } | null>(null);
 
-  const table = useReactTable({
-    data,
-    columns,
-    defaultColumn,
-    getCoreRowModel: getCoreRowModel(),
-    getRowId: (row) => String(row.id),
-    onSortingChange: setSorting,
-    onRowSelectionChange: setRowSelection,
-    getSortedRowModel: getSortedRowModel(),
-    state: {
-      sorting,
-      rowSelection,
+  const sortedData = React.useMemo(
+    () => sortExpenses(data, sort, selectOptions),
+    [data, selectOptions, sort],
+  );
+  const gridColumns = React.useMemo(() => computeColumns(containerWidth, sort), [containerWidth, sort]);
+  const hasRows = sortedData.length > 0;
+  const rowCount = hasRows ? sortedData.length + 1 : 2;
+  const footerRow = hasRows ? sortedData.length : -1;
+
+  const getCellContent = React.useCallback(
+    ([columnIndex, rowIndex]: Item): GridCell => {
+      if (!hasRows) {
+        return columnIndex === 2 && rowIndex === 0
+          ? makeTextCell("Drag you credit card statement here to begin!", undefined, "center", true)
+          : makeTextCell("", undefined, "left", true);
+      }
+
+      const columnId = COLUMN_IDS[columnIndex];
+      if (!columnId) return makeTextCell("", undefined, "left", true);
+
+      if (rowIndex === footerRow) {
+        if (columnId === "title") return makeFooterCell("Total");
+        if (columnId === "amount") {
+          const totalsByCurrency = sortedData.reduce<Record<string, number>>((totals, expense) => {
+            const currency = expense.currency ?? "ARS";
+            totals[currency] = (totals[currency] ?? 0) + Number(expense.amount ?? 0);
+            return totals;
+          }, {});
+          return makeFooterCell(
+            Object.entries(totalsByCurrency)
+              .map(([currency, total]) => formatCurrency(total, currency))
+              .join("\n"),
+            "right",
+          );
+        }
+
+        return makeFooterCell("");
+      }
+
+      const expense = sortedData[rowIndex];
+      if (!expense) return makeTextCell("", undefined, "left", true);
+
+      switch (columnId) {
+        case "actions":
+          return makeActionCell();
+        case "amount": {
+          const parsed = parseAmountInput(expense.amount);
+          const amountText = String(parsed.amount);
+          return {
+            allowNegative: true,
+            allowOverlay: true,
+            contentAlign: "right",
+            copyData: amountText,
+            data: parsed.amount,
+            displayData: amountText,
+            kind: GridCellKind.Number,
+            thousandSeparator: false,
+          };
+        }
+        case "category":
+        case "usedByTarget":
+          return makeSelectCell(expense[columnId], selectOptions[columnId] ?? []);
+        case "date":
+          return makeTextCell(toDateTextValue(expense.date), formatDateValue(expense.date));
+        case "installments":
+          return makeTextCell(String(expense.installments ?? ""), undefined, "right");
+        case "origin":
+        case "title":
+          return makeTextCell(String(expense[columnId] ?? ""));
+      }
     },
-    meta: {
-      insertRelativeExpense: onInsertRelativeExpense,
-      updateData: onUpdateData,
-      selectOptions,
+    [footerRow, hasRows, selectOptions, sortedData],
+  );
+
+  const onHeaderClicked = React.useCallback((columnIndex: number) => {
+    const columnId = COLUMN_IDS[columnIndex];
+    if (!columnId || !isSortableColumn(columnId)) return;
+
+    setSort((current) => {
+      if (current?.column !== columnId) return { column: columnId, direction: "asc" };
+      if (current.direction === "asc") return { column: columnId, direction: "desc" };
+      return null;
+    });
+  }, []);
+
+  const onCellEdited = React.useCallback(
+    ([columnIndex, rowIndex]: Item, newValue: EditableGridCell) => {
+      const columnId = COLUMN_IDS[columnIndex];
+      const expense = sortedData[rowIndex];
+      if (!columnId || columnId === "actions" || !expense || rowIndex === footerRow) return;
+
+      if (newValue.kind === GridCellKind.Custom && isDropdownCell(newValue)) {
+        onUpdateData(expense.id, columnId, newValue.data.value || null);
+        return;
+      }
+
+      if ("data" in newValue) {
+        onUpdateData(expense.id, columnId, newValue.data);
+      }
     },
-  });
+    [footerRow, onUpdateData, sortedData],
+  );
 
-  const selectedExpenseIds = table.getSelectedRowModel().rows.map((row) => row.original.id);
-  const hasRows = table.getRowModel().rows.length > 0;
+  const onCellClicked = React.useCallback(
+    ([columnIndex, rowIndex]: Item) => {
+      const columnId = COLUMN_IDS[columnIndex];
+      const expense = sortedData[rowIndex];
 
-  async function handleDeleteSelected() {
-    if (selectedExpenseIds.length === 0) return;
-    await onDeleteExpenses(selectedExpenseIds);
-    setRowSelection({});
+      if (columnId !== "actions" || !expense) {
+        setActionMenu(null);
+        return;
+      }
+
+      const bounds = gridRef.current?.getBounds(columnIndex, rowIndex);
+      setActionMenu({
+        expenseId: expense.id,
+        left: Math.max(8, (bounds?.x ?? 0) + (bounds?.width ?? 0) - 150),
+        top: (bounds?.y ?? 0) + (bounds?.height ?? 0) + 4,
+      });
+    },
+    [sortedData],
+  );
+
+  async function handleInsertRelative(position: "above" | "below") {
+    if (!actionMenu) return;
+    await onInsertRelativeExpense(actionMenu.expenseId, position);
+    setActionMenu(null);
   }
 
   return (
-    <div className="overflow-hidden rounded-md border">
-      {selectedExpenseIds.length > 0 && (
-        <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2">
-          <p className="text-sm text-muted-foreground">{selectedExpenseIds.length} selected</p>
-          <Button
-            variant="destructive"
-            size="sm"
-            disabled={isDeletingExpenses}
-            onClick={() => void handleDeleteSelected()}
+    <div ref={containerRef} className="overflow-hidden rounded-md border bg-background">
+      <div className="relative">
+        <DataEditor
+          ref={gridRef}
+          cellActivationBehavior="double-click"
+          columns={gridColumns}
+          customRenderers={[DropdownCell]}
+          fillHandle={false}
+          getCellContent={getCellContent}
+          getCellsForSelection
+          headerHeight={36}
+          height={getGridHeight(rowCount)}
+          keybindings={{ search: false }}
+          minColumnWidth={24}
+          onCellClicked={onCellClicked}
+          onCellEdited={onCellEdited}
+          onHeaderClicked={onHeaderClicked}
+          rangeSelect="none"
+          rowHeight={34}
+          rowMarkers={{
+            checkboxStyle: "square",
+            kind: "both",
+            theme: {
+              textMedium: "rgba(51, 51, 51, 0.50)",
+            },
+          }}
+          rows={rowCount}
+          smoothScrollX
+          smoothScrollY
+          theme={GRID_THEME}
+          verticalBorder
+          width="100%"
+        />
+
+        {actionMenu && (
+          <div
+            className="fixed z-20 w-36 overflow-hidden rounded-md border bg-popover py-1 text-sm shadow-md"
+            style={{ left: actionMenu.left, top: actionMenu.top }}
           >
-            Delete selected
-          </Button>
-        </div>
-      )}
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => {
-                return (
-                  <TableHead
-                    key={header.id}
-                    className={header.column.columnDef.meta?.headerClassName}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
-                );
-              })}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {hasRows ? (
-            table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id} className={cell.column.columnDef.meta?.cellClassName}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={columns.length} className="h-24 text-center">
-                Drag you credit card statement here to begin!
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-        {hasRows && (
-          <TableFooter>
-            {table.getFooterGroups().map((footerGroup) => (
-              <TableRow key={footerGroup.id}>
-                {footerGroup.headers.map((header) => (
-                  <TableCell
-                    key={header.id}
-                    className={header.column.columnDef.meta?.footerClassName}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.footer, header.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableFooter>
+            <button
+              className="block w-full px-3 py-2 text-left hover:bg-accent"
+              type="button"
+              onClick={() => void handleInsertRelative("above")}
+            >
+              Add row above
+            </button>
+            <button
+              className="block w-full px-3 py-2 text-left hover:bg-accent"
+              type="button"
+              onClick={() => void handleInsertRelative("below")}
+            >
+              Add row below
+            </button>
+          </div>
         )}
-      </Table>
+      </div>
     </div>
   );
 }

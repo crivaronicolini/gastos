@@ -1,0 +1,76 @@
+.glide-select,
+.gdg-wghi2zc,
+.gdg-p13nj8j0 {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.glide-select [class*="-control"],
+.glide-select [class*="-valueContainer"],
+.glide-select [class*="-input"],
+.glide-select [class*="-singleValue"] {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.glide-select [class*="-control"] {
+  border: 1px solid oklch(0.708 0 0 / 45%) !important;
+  border-radius: 6px !important;
+}
+
+.glide-select [class*="-input"] input {
+  color: var(--foreground) !important;
+}
+
+.gdg-p13nj8j0 [class*="-menu"],
+.gdg-p13nj8j0 [class*="-menuList"],
+.gdg-p13nj8j0 .click-outside-ignore,
+.gdg-p13nj8j0 .click-outside-ignore > div {
+  background-color: var(--popover) !important;
+  color: var(--popover-foreground) !important;
+}
+
+.gdg-p13nj8j0 [class*="-menu"],
+.gdg-p13nj8j0 .click-outside-ignore > div {
+  border: 1px solid oklch(0.708 0 0 / 45%) !important;
+  border-radius: 6px !important;
+  overflow: hidden;
+}
+
+.gdg-p13nj8j0 [class*="-option"] {
+  background-color: var(--popover) !important;
+  color: var(--popover-foreground) !important;
+}
+
+.gdg-p13nj8j0 [class*="-option"]:hover,
+.gdg-p13nj8j0 [class*="-option"][aria-selected="true"] {
+  background-color: var(--accent) !important;
+  color: var(--accent-foreground) !important;
+}
+
+[class^="gdg-d19meir"],
+[class*=" gdg-d19meir"] {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+[class^="gdg-d19meir"].gdg-style,
+[class*=" gdg-d19meir"].gdg-style {
+  background-color: var(--background) !important;
+  border-radius: 6px !important;
+  box-shadow:
+    0 0 0 1px oklch(0.708 0 0 / 45%),
+    0 6px 12px rgb(0 0 0 / 35%) !important;
+}
+
+[class^="gdg-d19meir"] .gdg-clip-region,
+[class*=" gdg-d19meir"] .gdg-clip-region,
+[class^="gdg-d19meir"] .gdg-growing-entry,
+[class*=" gdg-d19meir"] .gdg-growing-entry,
+[class^="gdg-d19meir"] input.gdg-input,
+[class*=" gdg-d19meir"] input.gdg-input,
+[class^="gdg-d19meir"] textarea.gdg-input,
+[class*=" gdg-d19meir"] textarea.gdg-input {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
