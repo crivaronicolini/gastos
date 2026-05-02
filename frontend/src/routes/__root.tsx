@@ -8,7 +8,6 @@ import { UserButton } from "@/components/user/user-button";
 
 export const Route = createRootRoute({
   component: RootComponent,
-  errorComponent: RootErrorComponent,
 });
 
 function RootComponent() {
@@ -56,25 +55,6 @@ function AppShell() {
       </nav>
       <div className="justify-self-end">
         <UserButton size="icon" />
-      </div>
-    </div>
-  );
-}
-
-function RootErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  return (
-    <div className="mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-4xl flex-col gap-4 px-4 py-8">
-      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-        <h1 className="text-lg font-semibold">App boot failed</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          This is the error that was previously showing up as a white screen.
-        </p>
-        <pre className="mt-4 overflow-auto rounded-md bg-background p-3 text-sm text-destructive">
-          {error.message}
-        </pre>
-        <Button className="mt-4" variant="outline" onClick={() => reset()}>
-          Retry
-        </Button>
       </div>
     </div>
   );
