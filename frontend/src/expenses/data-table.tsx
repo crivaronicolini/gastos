@@ -1,11 +1,13 @@
 import "@glideapps/glide-data-grid/dist/index.css";
 import "@glideapps/glide-data-grid-cells/dist/index.css";
 import "./data-table.css";
+import type { Expense } from "@server/db/schema";
 
 import {
   CompactSelection,
   DataEditor,
   GridCellKind,
+  getDefaultTheme,
   type CustomCell,
   type DataEditorRef,
   type EditableGridCell,
@@ -17,13 +19,14 @@ import {
 } from "@glideapps/glide-data-grid";
 import { DropdownCell, type DropdownCellType } from "@glideapps/glide-data-grid-cells";
 import { Plus, X } from "lucide-react";
-import type { Expense } from "@server/db/schema";
 import * as React from "react";
 
-import { useDeleteExpenses } from "@/expenses/use-delete-expenses";
 import { Button } from "@/components/ui/button";
-import { parseAmountInput } from "./parse-amount-input.ts";
+import { useDeleteExpenses } from "@/expenses/use-delete-expenses";
+
 import type { SelectCellOption } from "./select-cell.tsx";
+
+import { parseAmountInput } from "./parse-amount-input.ts";
 
 interface DataTableProps {
   data: Expense[];
@@ -86,21 +89,24 @@ const BASE_COLUMN_WIDTHS: Record<SortableColumnId, number> = {
   usedByTarget: 74,
 };
 
-const GRID_THEME: Partial<Theme> = {
-  accentColor: "oklch(0.708 0 0)",
-  accentFg: "oklch(0.145 0 0)",
-  accentLight: "oklch(0.269 0 0)",
-  bgCell: "oklch(0.145 0 0)",
-  bgCellMedium: "oklch(0.269 0 0)",
-  bgHeader: "oklch(0.205 0 0)",
-  bgHeaderHasFocus: "oklch(0.269 0 0)",
-  bgHeaderHovered: "oklch(0.269 0 0)",
-  borderColor: "oklch(1 0 0 / 10%)",
-  textDark: "oklch(0.985 0 0)",
-  textHeader: "oklch(0.985 0 0)",
-  textHeaderSelected: "oklch(0.145 0 0)",
-  textLight: "oklch(0.708 0 0)",
-  textMedium: "oklch(0.708 0 0)",
+const GRID_THEME: Theme = {
+  ...getDefaultTheme(),
+  // Glide blends canvas colors internally and v6 does not reliably parse CSS Color 4
+  // space-separated oklch() values. Use RGB/RGBA tokens for deterministic repainting.
+  accentColor: "rgba(190, 190, 190, 0.72)",
+  accentFg: "#171717",
+  accentLight: "rgba(145, 145, 145, 0.04)",
+  bgCell: "#171717",
+  bgCellMedium: "#1c1c1c",
+  bgHeader: "#2a2a2a",
+  bgHeaderHasFocus: "rgba(46, 46, 46, 0.78)",
+  bgHeaderHovered: "rgba(46, 46, 46, 0.78)",
+  borderColor: "rgba(255, 255, 255, 0.10)",
+  textDark: "#fafafa",
+  textHeader: "#fafafa",
+  textHeaderSelected: "#171717",
+  textLight: "#b4b4b4",
+  textMedium: "#8e8e8e",
 };
 
 const EMPTY_SELECTION: GridSelection = {
@@ -167,7 +173,11 @@ function makeTextCell(
   };
 }
 
-function makeSelectCell(value: unknown, options: SelectCellOption[], readonly = false): DropdownCellType {
+function makeSelectCell(
+  value: unknown,
+  options: SelectCellOption[],
+  readonly = false,
+): DropdownCellType {
   const stringValue = value == null ? "" : String(value);
   const display = getSelectDisplay(value, options);
 
@@ -197,14 +207,21 @@ function compareValues(a: unknown, b: unknown) {
   if (b == null) return 1;
 
   if (a instanceof Date || b instanceof Date) {
-    return new Date(a as string | number | Date).getTime() - new Date(b as string | number | Date).getTime();
+    return (
+      new Date(a as string | number | Date).getTime() -
+      new Date(b as string | number | Date).getTime()
+    );
   }
 
   if (typeof a === "number" && typeof b === "number") return a - b;
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
 }
 
-function sortExpenses(expenses: Expense[], sort: SortState, selectOptions: Record<string, SelectCellOption[]>) {
+function sortExpenses(
+  expenses: Expense[],
+  sort: SortState,
+  selectOptions: Record<string, SelectCellOption[]>,
+) {
   if (!sort) return expenses;
 
   return [...expenses].sort((first, second) => {
@@ -304,12 +321,7 @@ function useElementWidth() {
   return [setElement, width] as const;
 }
 
-export function DataTable({
-  data,
-  onAddExpense,
-  selectOptions,
-  onUpdateData,
-}: DataTableProps) {
+export function DataTable({ data, onAddExpense, selectOptions, onUpdateData }: DataTableProps) {
   const tableId = React.useId();
   const gridRef = React.useRef<DataEditorRef>(null);
   const deleteExpenses = useDeleteExpenses();
@@ -342,7 +354,10 @@ export function DataTable({
     () => sortExpenses(filteredData, sort, selectOptions),
     [filteredData, selectOptions, sort],
   );
-  const gridColumns = React.useMemo(() => computeColumns(containerWidth, sort), [containerWidth, sort]);
+  const gridColumns = React.useMemo(
+    () => computeColumns(containerWidth, sort),
+    [containerWidth, sort],
+  );
   const hasRows = sortedData.length > 0;
   const rowCount = sortedData.length;
   const selectedExpenseIds = React.useMemo(
@@ -355,12 +370,9 @@ export function DataTable({
     [selection.rows, sortedData],
   );
 
-  const onGridSelectionChange = React.useCallback(
-    (nextSelection: GridSelection) => {
-      setSelection(nextSelection);
-    },
-    [],
-  );
+  const onGridSelectionChange = React.useCallback((nextSelection: GridSelection) => {
+    setSelection(nextSelection);
+  }, []);
 
   const clearSelection = React.useCallback(() => {
     setSelection(EMPTY_SELECTION);
@@ -499,9 +511,6 @@ export function DataTable({
           rowMarkers={{
             checkboxStyle: "square",
             kind: "both",
-            theme: {
-              textMedium: "rgba(51, 51, 51, 0.50)",
-            },
           }}
           rows={rowCount}
           searchResults={[]}
