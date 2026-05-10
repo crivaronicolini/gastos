@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_als"],
   "workers_dev": false,
   "vars": {
-    "BETTER_AUTH_URL": "http://gastos.crivaronicolini.com",
+    "BETTER_AUTH_URL": "https://gastos.crivaronicolini.com",
   },
   "observability": {
     "logs": {
