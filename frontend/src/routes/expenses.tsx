@@ -378,6 +378,7 @@ export function Expenses() {
       const res = await api.expenses.$post({
         json: {
           groupId: currentGroup.id,
+          month: selectedPeriod,
           ownerId,
           title: "",
           amount: 0,
@@ -396,10 +397,15 @@ export function Expenses() {
       return data;
     },
     onSuccess: ({ expense }) => {
-      queryClient.setQueryData<{ expenses: Expense[] }>(["get-all-expenses"], (current) => {
-        if (!current) return { expenses: [expense as Expense] };
-        return { expenses: [...current.expenses, expense as Expense] };
-      });
+      queryClient.setQueryData<{ expenses: ExpenseWithStatementPeriod[] }>(
+        ["get-all-expenses"],
+        (current) => {
+          if (!current) return { expenses: [expense as ExpenseWithStatementPeriod] };
+          return {
+            expenses: [...current.expenses, expense as ExpenseWithStatementPeriod],
+          };
+        },
+      );
     },
   });
 

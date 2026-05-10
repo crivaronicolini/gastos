@@ -16,13 +16,12 @@ import {
   type Theme,
 } from "@glideapps/glide-data-grid";
 import { DropdownCell, type DropdownCellType } from "@glideapps/glide-data-grid-cells";
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import type { Expense } from "@server/db/schema";
 import * as React from "react";
 
 import { useDeleteExpenses } from "@/expenses/use-delete-expenses";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { parseAmountInput } from "./parse-amount-input.ts";
 import type { SelectCellOption } from "./select-cell.tsx";
 
@@ -165,16 +164,6 @@ function makeTextCell(
     displayData,
     kind: GridCellKind.Text,
     readonly,
-  };
-}
-
-function makeFooterCell(data: string, align: GridCell["contentAlign"] = "left"): GridCell {
-  return {
-    ...makeTextCell(data, undefined, align, true),
-    themeOverride: {
-      bgCell: "oklch(0.205 0 0)",
-      textDark: "oklch(0.985 0 0)",
-    },
   };
 }
 
@@ -329,7 +318,6 @@ export function DataTable({
   const [showSearch, setShowSearch] = React.useState(false);
   const [searchValue, setSearchValue] = React.useState("");
   const [selection, setSelection] = React.useState<GridSelection>(EMPTY_SELECTION);
-  const [numRows, setNumRows] = React.useState(0);
 
   React.useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -356,9 +344,7 @@ export function DataTable({
   );
   const gridColumns = React.useMemo(() => computeColumns(containerWidth, sort), [containerWidth, sort]);
   const hasRows = sortedData.length > 0;
-  const effectiveRowCount = hasRows ? sortedData.length + 1 : 2;
-  const rowCount = Math.max(effectiveRowCount, numRows + 1);
-  const footerRow = hasRows ? sortedData.length : -1;
+  const rowCount = sortedData.length;
   const selectedExpenseIds = React.useMemo(
     () =>
       selection.rows
@@ -368,12 +354,6 @@ export function DataTable({
         .filter((id): id is number => id != null),
     [selection.rows, sortedData],
   );
-
-  const onRowAppended = React.useCallback(async () => {
-    await onAddExpense();
-    setNumRows((prev) => prev + 1);
-    return "bottom" as const;
-  }, [onAddExpense]);
 
   const onGridSelectionChange = React.useCallback(
     (nextSelection: GridSelection) => {
@@ -392,43 +372,31 @@ export function DataTable({
     clearSelection();
     await deleteExpenses.mutateAsync(selectedExpenseIds);
   }, [clearSelection, deleteExpenses, selectedExpenseIds]);
+  const totalsByCurrency = React.useMemo(
+    () =>
+      sortedData.reduce<Record<string, number>>((totals, expense) => {
+        const currency = expense.currency ?? "ARS";
+        totals[currency] = (totals[currency] ?? 0) + Number(expense.amount ?? 0);
+        return totals;
+      }, {}),
+    [sortedData],
+  );
+  const totalText = React.useMemo(
+    () =>
+      Object.entries(totalsByCurrency)
+        .map(([currency, total]) => formatCurrency(total, currency))
+        .join(" · "),
+    [totalsByCurrency],
+  );
 
   const getCellContent = React.useCallback(
     ([columnIndex, rowIndex]: Item): GridCell => {
       if (!hasRows) {
-        return columnIndex === 2 && rowIndex === 0
-          ? makeTextCell(
-              searchValue.trim()
-                ? "No expenses match your search."
-                : "Drag you credit card statement here to begin!",
-              undefined,
-              "center",
-              true,
-            )
-          : makeTextCell("", undefined, "left", true);
+        return makeTextCell("", undefined, "left", true);
       }
 
       const columnId = COLUMN_IDS[columnIndex];
       if (!columnId) return makeTextCell("", undefined, "left", true);
-
-      if (rowIndex === footerRow) {
-        if (columnId === "title") return makeFooterCell("Total");
-        if (columnId === "amount") {
-          const totalsByCurrency = sortedData.reduce<Record<string, number>>((totals, expense) => {
-            const currency = expense.currency ?? "ARS";
-            totals[currency] = (totals[currency] ?? 0) + Number(expense.amount ?? 0);
-            return totals;
-          }, {});
-          return makeFooterCell(
-            Object.entries(totalsByCurrency)
-              .map(([currency, total]) => formatCurrency(total, currency))
-              .join("\n"),
-            "right",
-          );
-        }
-
-        return makeFooterCell("");
-      }
 
       const expense = sortedData[rowIndex];
       if (!expense) return makeTextCell("", undefined, "left", true);
@@ -460,7 +428,7 @@ export function DataTable({
           return makeTextCell(String(expense[columnId] ?? ""));
       }
     },
-    [footerRow, hasRows, searchValue, selectOptions, sortedData],
+    [hasRows, selectOptions, sortedData],
   );
 
   const onHeaderClicked = React.useCallback((columnIndex: number) => {
@@ -478,7 +446,7 @@ export function DataTable({
     ([columnIndex, rowIndex]: Item, newValue: EditableGridCell) => {
       const columnId = COLUMN_IDS[columnIndex];
       const expense = sortedData[rowIndex];
-      if (!columnId || !expense || rowIndex === footerRow) return;
+      if (!columnId || !expense) return;
 
       if (newValue.kind === GridCellKind.Custom && isDropdownCell(newValue)) {
         onUpdateData(expense.id, columnId, newValue.data.value || null);
@@ -489,7 +457,7 @@ export function DataTable({
         onUpdateData(expense.id, columnId, newValue.data);
       }
     },
-    [footerRow, onUpdateData, sortedData],
+    [onUpdateData, sortedData],
   );
 
   return (
@@ -526,7 +494,6 @@ export function DataTable({
             setSearchValue("");
           }}
           onSearchValueChange={setSearchValue}
-          onRowAppended={onRowAppended}
           rangeSelect="none"
           rowHeight={34}
           rowMarkers={{
@@ -543,48 +510,56 @@ export function DataTable({
           smoothScrollX
           smoothScrollY
           theme={GRID_THEME}
-          trailingRowOptions={{
-            sticky: false,
-            tint: true,
-            hint: "New row...",
-          }}
           verticalBorder
           width="100%"
         />
-
-        {selectedExpenseIds.length > 0 && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center px-2">
-            <Card
-              size="sm"
-              className="pointer-events-auto w-auto border-foreground/15 bg-background/95 shadow-md"
-            >
-              <CardContent className="flex items-center gap-1.5 py-1.5">
-                <p className="text-[11px] leading-none text-foreground/85">
-                  {selectedExpenseIds.length} selected
-                </p>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  className="size-6"
-                  aria-label="Clear selection"
-                  onClick={clearSelection}
-                >
-                  <X className="size-3.5" />
-                </Button>
-                <Button
-                  size="xs"
-                  variant="destructive"
-                  className="h-6 px-2 text-[11px]"
-                  disabled={deleteExpenses.isPending}
-                  onClick={() => void deleteSelectedExpenses()}
-                >
-                  {deleteExpenses.isPending ? "Deleting..." : "Delete"}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
       </div>
+
+      {hasRows && (
+        <div className="relative flex min-h-11 items-center border-t bg-muted/35 px-3 py-2 text-xs">
+          {selectedExpenseIds.length > 0 ? (
+            <div className="flex h-7 items-center gap-1.5 pl-2">
+              <span className="text-[11px] leading-none text-foreground/85">
+                {selectedExpenseIds.length} selected
+              </span>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                className="size-6"
+                aria-label="Clear selection"
+                onClick={clearSelection}
+              >
+                <X className="size-3.5" />
+              </Button>
+              <Button
+                size="xs"
+                variant="destructive"
+                className="h-6 px-2 text-[11px]"
+                disabled={deleteExpenses.isPending}
+                onClick={() => void deleteSelectedExpenses()}
+              >
+                {deleteExpenses.isPending ? "Deleting..." : "Delete"}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex h-7 items-center gap-1.5">
+              <Button
+                size="xs"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                onClick={() => void onAddExpense()}
+              >
+                <Plus className="size-3.5" />
+                Add expense
+              </Button>
+            </div>
+          )}
+          <div className="pointer-events-none absolute inset-x-0 flex items-center justify-center gap-3">
+            <span className="text-muted-foreground">Total</span>
+            <span className="font-medium text-foreground">{totalText}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

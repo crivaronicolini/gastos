@@ -72,8 +72,17 @@ export const expenseUpdateSchema = createUpdateSchema(expenses, {
   currency: z.enum(["ARS", "USD"]).optional(),
   date: z.coerce.date().optional().nullable(),
 });
+export const expenseCreateSchema = expenseInsertSchema.extend({
+  groupId: z.number().int().positive().optional(),
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(),
+  ownerId: z.number().int().positive().optional(),
+});
 
 export type Expense = z.infer<typeof expenseSelectSchema>;
+export type ExpenseCreate = z.infer<typeof expenseCreateSchema>;
 export type ExpenseInsert = z.infer<typeof expenseInsertSchema>;
 export type ExpenseUpdate = z.infer<typeof expenseUpdateSchema>;
 
