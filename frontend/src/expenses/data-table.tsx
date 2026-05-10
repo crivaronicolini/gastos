@@ -289,7 +289,7 @@ function computeColumns(containerWidth: number, sort: SortState): GridColumn[] {
 
 function getGridHeight(rowCount: number) {
   const rows = Math.max(rowCount, 2);
-  return Math.min(560, 36 + rows * 34 + 2);
+  return 36 + rows * 34 + 2;
 }
 
 function useElementWidth() {
@@ -475,6 +475,7 @@ export function DataTable({
         <DataEditor
           ref={gridRef}
           cellActivationBehavior="double-click"
+          className="expenses-grid"
           columns={gridColumns}
           customRenderers={[DropdownCell]}
           fillHandle={false}

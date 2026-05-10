@@ -106,3 +106,7 @@
 [class*=" gdg-seveqep"] button:hover {
   color: var(--foreground) !important;
 }
+
+.expenses-grid.dvn-scroller {
+  overflow: hidden !important;
+}
