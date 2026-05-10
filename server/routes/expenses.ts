@@ -106,9 +106,36 @@ export const expenseRoute = new Hono<AppEnv>()
   .post("/", zValidator("json", expenseInsertSchema), async (c) => {
     const db = c.get("db");
     const expense = c.req.valid("json");
-    const ret = await db.insert(expenses).values(expense).returning();
+    let statementId = expense.statement;
+    let statementData: { group: number; month: string; owner: number } | null = null;
+
+    if (!statementId && expense.groupId && expense.ownerId) {
+      const month = new Date().toISOString().slice(0, 7);
+      const extrasStatement = await findOrCreateExtrasStatement(
+        db,
+        expense.groupId,
+        expense.ownerId,
+        month,
+      );
+      statementId = extrasStatement.id;
+      statementData = { group: extrasStatement.group, month: extrasStatement.month, owner: extrasStatement.owner };
+    }
+
+    const ret = await db
+      .insert(expenses)
+      .values({ ...expense, statement: statementId })
+      .returning();
+
+    const expenseData = ret[0];
     c.status(201);
-    return c.json(ret);
+    return c.json({
+      expense: {
+        ...expenseData,
+        statementGroupId: statementData?.group ?? null,
+        statementMonth: statementData?.month ?? null,
+        statementOwnerId: statementData?.owner ?? null,
+      },
+    });
   })
   .post(
     "/insert-relative",

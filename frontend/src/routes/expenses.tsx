@@ -15,7 +15,6 @@ import {
   type TrackedUpload,
   type WorkflowStatusResponse,
 } from "@/expenses/upload-tracking";
-import { useInsertRelativeExpense } from "@/expenses/use-insert-relative-expense";
 import { useUpdateExpense } from "@/expenses/use-update-expense";
 import { api } from "@/lib/api";
 import authClient from "@/lib/auth-client";
@@ -368,8 +367,47 @@ export function Expenses() {
     },
   });
 
-  const insertRelativeExpense = useInsertRelativeExpense();
   const updateExpense = useUpdateExpense();
+
+  const addExpenseMutation = useMutation({
+    mutationFn: async ({ ownerId }: { ownerId: number }) => {
+      if (!currentGroup) {
+        throw new Error("Missing group");
+      }
+
+      const res = await api.expenses.$post({
+        json: {
+          groupId: currentGroup.id,
+          ownerId,
+          title: "",
+          amount: 0,
+          currency: "ARS",
+          date: new Date().toISOString().split("T")[0],
+          origin: "extras",
+          statement: null,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to create expense");
+      }
+
+      const data = await res.json();
+      return data;
+    },
+    onSuccess: ({ expense }) => {
+      queryClient.setQueryData<{ expenses: Expense[] }>(["get-all-expenses"], (current) => {
+        if (!current) return { expenses: [expense as Expense] };
+        return { expenses: [...current.expenses, expense as Expense] };
+      });
+    },
+  });
+
+  async function addExpense(ownerId: number) {
+    if (!currentGroup) return;
+    await addExpenseMutation.mutateAsync({ ownerId });
+  }
+
   const currentPeriod = React.useMemo(() => getCurrentPeriod(), []);
   const expenses = React.useMemo(
     () =>
@@ -517,21 +555,6 @@ export function Expenses() {
     });
   }
 
-  async function addRelativeExpense(
-    anchorExpenseId: number,
-    ownerId: number,
-    position: "above" | "below",
-  ) {
-    if (!currentGroup) return;
-
-    await insertRelativeExpense.mutateAsync({
-      anchorExpenseId,
-      groupId: currentGroup.id,
-      ownerId,
-      position,
-    });
-  }
-
   if (error) return "An error has ocurred: " + error.message;
 
   const groupTitle = getGroupDisplayName(currentGroup);
@@ -600,9 +623,7 @@ export function Expenses() {
               )}
               <DataTable
                 data={userExpenses}
-                onInsertRelativeExpense={(anchorExpenseId, position) =>
-                  addRelativeExpense(anchorExpenseId, user.id, position)
-                }
+                onAddExpense={() => addExpense(user.id)}
                 selectOptions={{
                   category: categoriesQuery.data?.categories ?? [],
                   usedByTarget: usageTargets,

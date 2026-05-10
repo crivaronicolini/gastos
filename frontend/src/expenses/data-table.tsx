@@ -24,7 +24,7 @@ import type { SelectCellOption } from "./select-cell.tsx";
 
 interface DataTableProps {
   data: Expense[];
-  onInsertRelativeExpense: (anchorExpenseId: number, position: "above" | "below") => Promise<void>;
+  onAddExpense: () => Promise<void>;
   selectOptions: Record<string, SelectCellOption[]>;
   onUpdateData: (expenseId: number, columnId: string, value: unknown) => void;
 }
@@ -38,14 +38,12 @@ type SortableColumnId =
   | "category"
   | "usedByTarget";
 
-type DisplayColumnId = SortableColumnId | "actions";
-
 type SortState = {
   column: SortableColumnId;
   direction: "asc" | "desc";
 } | null;
 
-const SORTABLE_COLUMNS = new Set<DisplayColumnId>([
+const SORTABLE_COLUMNS = new Set<SortableColumnId>([
   "origin",
   "date",
   "title",
@@ -55,7 +53,7 @@ const SORTABLE_COLUMNS = new Set<DisplayColumnId>([
   "usedByTarget",
 ]);
 
-const COLUMN_IDS: DisplayColumnId[] = [
+const COLUMN_IDS: SortableColumnId[] = [
   "origin",
   "date",
   "title",
@@ -63,11 +61,9 @@ const COLUMN_IDS: DisplayColumnId[] = [
   "installments",
   "category",
   "usedByTarget",
-  "actions",
 ];
 
-const COLUMN_LABELS: Record<DisplayColumnId, string> = {
-  actions: "",
+const COLUMN_LABELS: Record<SortableColumnId, string> = {
   amount: "Amount",
   category: "Categoría",
   date: "Fecha",
@@ -77,8 +73,7 @@ const COLUMN_LABELS: Record<DisplayColumnId, string> = {
   usedByTarget: "Usó",
 };
 
-const BASE_COLUMN_WIDTHS: Record<DisplayColumnId, number> = {
-  actions: 38,
+const BASE_COLUMN_WIDTHS: Record<SortableColumnId, number> = {
   amount: 104,
   category: 96,
   date: 86,
@@ -112,7 +107,7 @@ const EMPTY_SELECTION: GridSelection = {
 
 let activeSearchTableId: string | null = null;
 
-function isSortableColumn(columnId: DisplayColumnId): columnId is SortableColumnId {
+function isSortableColumn(columnId: SortableColumnId): columnId is SortableColumnId {
   return SORTABLE_COLUMNS.has(columnId);
 }
 
@@ -176,18 +171,6 @@ function makeFooterCell(data: string, align: GridCell["contentAlign"] = "left"):
       bgCell: "oklch(0.205 0 0)",
       textDark: "oklch(0.985 0 0)",
     },
-  };
-}
-
-function makeActionCell(): GridCell {
-  return {
-    allowOverlay: false,
-    contentAlign: "center",
-    copyData: "",
-    data: "...",
-    displayData: "...",
-    kind: GridCellKind.Text,
-    readonly: true,
   };
 }
 
@@ -274,7 +257,7 @@ function filterExpenses(
   return expenses.filter((expense) => getSearchText(expense, selectOptions).includes(query));
 }
 
-function formatTitle(columnId: DisplayColumnId, sort: SortState) {
+function formatTitle(columnId: SortableColumnId, sort: SortState) {
   const label = COLUMN_LABELS[columnId];
   if (!sort || sort.column !== columnId) return label;
   return `${label} ${sort.direction === "asc" ? "↑" : "↓"}`;
@@ -295,7 +278,7 @@ function computeColumns(containerWidth: number, sort: SortState): GridColumn[] {
   const scaledTotal = scaledWidths.reduce((total, columnWidth) => total + columnWidth, 0);
   const adjustment = Math.floor(width) - scaledTotal;
   const titleIndex = COLUMN_IDS.indexOf("title");
-  scaledWidths[titleIndex] = Math.max(24, scaledWidths[titleIndex] + adjustment);
+  scaledWidths[titleIndex] = Math.max(24, (scaledWidths[titleIndex] ?? 0) + adjustment);
 
   return COLUMN_IDS.map((id, index) => ({
     id,
@@ -330,7 +313,7 @@ function useElementWidth() {
 
 export function DataTable({
   data,
-  onInsertRelativeExpense,
+  onAddExpense,
   selectOptions,
   onUpdateData,
 }: DataTableProps) {
@@ -341,11 +324,7 @@ export function DataTable({
   const [showSearch, setShowSearch] = React.useState(false);
   const [searchValue, setSearchValue] = React.useState("");
   const [selection, setSelection] = React.useState<GridSelection>(EMPTY_SELECTION);
-  const [actionMenu, setActionMenu] = React.useState<{
-    expenseId: number;
-    left: number;
-    top: number;
-  } | null>(null);
+  const [numRows, setNumRows] = React.useState(0);
 
   React.useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -372,8 +351,15 @@ export function DataTable({
   );
   const gridColumns = React.useMemo(() => computeColumns(containerWidth, sort), [containerWidth, sort]);
   const hasRows = sortedData.length > 0;
-  const rowCount = hasRows ? sortedData.length + 1 : 2;
+  const effectiveRowCount = hasRows ? sortedData.length + 1 : 2;
+  const rowCount = Math.max(effectiveRowCount, numRows + 1);
   const footerRow = hasRows ? sortedData.length : -1;
+
+  const onRowAppended = React.useCallback(async () => {
+    await onAddExpense();
+    setNumRows((prev) => prev + 1);
+    return "bottom" as const;
+  }, [onAddExpense]);
 
   const getCellContent = React.useCallback(
     ([columnIndex, rowIndex]: Item): GridCell => {
@@ -416,8 +402,6 @@ export function DataTable({
       if (!expense) return makeTextCell("", undefined, "left", true);
 
       switch (columnId) {
-        case "actions":
-          return makeActionCell();
         case "amount": {
           const parsed = parseAmountInput(expense.amount);
           const amountText = String(parsed.amount);
@@ -462,7 +446,7 @@ export function DataTable({
     ([columnIndex, rowIndex]: Item, newValue: EditableGridCell) => {
       const columnId = COLUMN_IDS[columnIndex];
       const expense = sortedData[rowIndex];
-      if (!columnId || columnId === "actions" || !expense || rowIndex === footerRow) return;
+      if (!columnId || !expense || rowIndex === footerRow) return;
 
       if (newValue.kind === GridCellKind.Custom && isDropdownCell(newValue)) {
         onUpdateData(expense.id, columnId, newValue.data.value || null);
@@ -475,32 +459,6 @@ export function DataTable({
     },
     [footerRow, onUpdateData, sortedData],
   );
-
-  const onCellClicked = React.useCallback(
-    ([columnIndex, rowIndex]: Item) => {
-      const columnId = COLUMN_IDS[columnIndex];
-      const expense = sortedData[rowIndex];
-
-      if (columnId !== "actions" || !expense) {
-        setActionMenu(null);
-        return;
-      }
-
-      const bounds = gridRef.current?.getBounds(columnIndex, rowIndex);
-      setActionMenu({
-        expenseId: expense.id,
-        left: Math.max(8, (bounds?.x ?? 0) + (bounds?.width ?? 0) - 150),
-        top: (bounds?.y ?? 0) + (bounds?.height ?? 0) + 4,
-      });
-    },
-    [sortedData],
-  );
-
-  async function handleInsertRelative(position: "above" | "below") {
-    if (!actionMenu) return;
-    await onInsertRelativeExpense(actionMenu.expenseId, position);
-    setActionMenu(null);
-  }
 
   return (
     <div
@@ -527,7 +485,6 @@ export function DataTable({
           height={getGridHeight(rowCount)}
           keybindings={{ search: false }}
           minColumnWidth={24}
-          onCellClicked={onCellClicked}
           onCellEdited={onCellEdited}
           onGridSelectionChange={setSelection}
           onHeaderClicked={onHeaderClicked}
@@ -536,6 +493,7 @@ export function DataTable({
             setSearchValue("");
           }}
           onSearchValueChange={setSearchValue}
+          onRowAppended={onRowAppended}
           rangeSelect="none"
           rowHeight={34}
           rowMarkers={{
@@ -552,31 +510,14 @@ export function DataTable({
           smoothScrollX
           smoothScrollY
           theme={GRID_THEME}
+          trailingRowOptions={{
+            sticky: false,
+            tint: true,
+            hint: "New row...",
+          }}
           verticalBorder
           width="100%"
         />
-
-        {actionMenu && (
-          <div
-            className="fixed z-20 w-36 overflow-hidden rounded-md border bg-popover py-1 text-sm shadow-md"
-            style={{ left: actionMenu.left, top: actionMenu.top }}
-          >
-            <button
-              className="block w-full px-3 py-2 text-left hover:bg-accent"
-              type="button"
-              onClick={() => void handleInsertRelative("above")}
-            >
-              Add row above
-            </button>
-            <button
-              className="block w-full px-3 py-2 text-left hover:bg-accent"
-              type="button"
-              onClick={() => void handleInsertRelative("below")}
-            >
-              Add row below
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
