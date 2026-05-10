@@ -43,9 +43,14 @@ export const Route = createFileRoute("/expenses")({
 const UPLOAD_STORAGE_KEY = "gastos:workflow-uploads";
 const SUCCESS_BADGE_TTL = 8_000;
 const TREMOR_COLORS = ["blue", "cyan", "indigo", "violet", "amber", "emerald", "rose"];
+const MAX_UPLOAD_BYTES = 95 * 1024 * 1024;
 
 type UploadResponse = {
   uploads: Array<Omit<TrackedUpload, "status">>;
+};
+
+type UploadMutationContext = {
+  optimisticUploads: TrackedUpload[];
 };
 
 type ExpenseWithStatementPeriod = Expense & {
@@ -92,6 +97,34 @@ function formatPeriodLabel(period: string, month: "short" | "long" = "short") {
     timeZone: "UTC",
     year: "numeric",
   }).format(new Date(`${period}-01T00:00:00Z`));
+}
+
+async function readErrorMessage(res: Response) {
+  const fallback = `Upload failed with HTTP ${res.status}`;
+
+  try {
+    const payload = (await res.json()) as { error?: unknown; message?: unknown };
+    if (typeof payload.message === "string") return payload.message;
+    if (typeof payload.error === "string") return payload.error;
+  } catch {
+    // Keep the status-based fallback when the response is not JSON.
+  }
+
+  return fallback;
+}
+
+function isPdfFile(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function removeOptimisticUploads(
+  uploads: TrackedUpload[],
+  optimisticUploads: TrackedUpload[] | undefined,
+) {
+  if (!optimisticUploads?.length) return uploads;
+
+  const optimisticIds = new Set(optimisticUploads.map((upload) => upload.workflowId));
+  return uploads.filter((upload) => !optimisticIds.has(upload.workflowId));
 }
 
 function getCurrentPeriod() {
@@ -200,7 +233,10 @@ export function Expenses() {
   const trackedUploads = trackedUploadsQuery.data;
   const groups = groupsQuery.data?.groups ?? [];
   const currentGroup = groups[0] ?? null;
-  const statementOwners = currentGroup?.members.map((member) => member.user) ?? [];
+  const statementOwners = React.useMemo(
+    () => currentGroup?.members.map((member) => member.user) ?? [],
+    [currentGroup?.members],
+  );
   const usageTargets = currentGroup?.usageTargets ?? [];
 
   const trackedWorkflowIds = trackedUploads
@@ -257,9 +293,18 @@ export function Expenses() {
         throw new Error("Missing group");
       }
 
-      const pdfs = Array.from(files).filter(
-        (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
-      );
+      const pdfs = Array.from(files).filter(isPdfFile);
+
+      if (pdfs.length === 0) {
+        throw new Error("Drop at least one PDF file.");
+      }
+
+      const oversized = pdfs.find((file) => file.size > MAX_UPLOAD_BYTES);
+      if (oversized) {
+        throw new Error(
+          `${oversized.name} is too large. Upload PDFs smaller than 95 MB through this page.`,
+        );
+      }
 
       const body = new FormData();
       body.append("group_id", String(currentGroup.id));
@@ -273,25 +318,25 @@ export function Expenses() {
         body,
       });
 
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res));
+      }
+
       return (await res.json()) as UploadResponse;
     },
-    onMutate: async ({ files, ownerId }) => {
-      if (!currentGroup) return { optimisticWorkflowIds: [] };
+    onMutate: ({ files, ownerId }) => {
+      if (!currentGroup) return { optimisticUploads: [] };
 
-      const optimisticUploads = Array.from(files)
-        .filter(
-          (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
-        )
-        .map((file) => ({
-          completedAt: undefined,
-          error: null,
-          fileKey: `optimistic:${file.name}`,
-          fileName: file.name,
-          groupId: currentGroup.id,
-          ownerId,
-          status: "queued" as const,
-          workflowId: `optimistic:${crypto.randomUUID()}`,
-        }));
+      const optimisticUploads = Array.from(files).filter(isPdfFile).map((file) => ({
+        completedAt: undefined,
+        error: null,
+        fileKey: `optimistic:${file.name}`,
+        fileName: file.name,
+        groupId: currentGroup.id,
+        ownerId,
+        status: "queued" as const,
+        workflowId: `optimistic:${crypto.randomUUID()}`,
+      }));
 
       queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) => [
         ...current,
@@ -299,22 +344,28 @@ export function Expenses() {
       ]);
 
       return {
-        optimisticWorkflowIds: optimisticUploads.map((upload) => upload.workflowId),
+        optimisticUploads,
       };
     },
-    onSuccess: (payload, _variables, context) => {
+    onSuccess: (payload, _variables, context: UploadMutationContext | undefined) => {
       queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) => [
-        ...current.filter((upload) => !context?.optimisticWorkflowIds.includes(upload.workflowId)),
+        ...removeOptimisticUploads(current, context?.optimisticUploads),
         ...payload.uploads.map((upload) => ({
           ...upload,
           status: "queued" as const,
         })),
       ]);
     },
-    onError: (_error, _variables, context) => {
-      queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) =>
-        current.filter((upload) => !context?.optimisticWorkflowIds.includes(upload.workflowId)),
-      );
+    onError: (error, _variables, context: UploadMutationContext | undefined) => {
+      const message = error instanceof Error ? error.message : String(error);
+      queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) => [
+        ...removeOptimisticUploads(current, context?.optimisticUploads),
+        ...(context?.optimisticUploads.map((upload) => ({
+          ...upload,
+          error: { message, name: "UploadError" },
+          status: "errored" as const,
+        })) ?? []),
+      ]);
     },
   });
 
@@ -534,15 +585,15 @@ export function Expenses() {
     return Array.from(event.dataTransfer.types).some((type) => type.toLowerCase() === "files");
   }
 
-  async function uploadFiles(files: FileList | File[], ownerId: number) {
+  function uploadFiles(files: FileList | File[], ownerId: number) {
     if (!currentGroup) return;
-    await uploadMutation.mutateAsync({ files, ownerId });
+    uploadMutation.mutate({ files, ownerId });
   }
 
   function onDrop(event: React.DragEvent<HTMLElement>, ownerId: number) {
     event.preventDefault();
     setDraggingOwnerId(null);
-    void uploadFiles(event.dataTransfer.files, ownerId);
+    uploadFiles(event.dataTransfer.files, ownerId);
   }
 
   async function retryUploads(uploads: TrackedUpload[]) {

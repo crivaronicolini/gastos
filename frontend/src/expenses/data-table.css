@@ -1,6 +1,5 @@
 .glide-select,
-.gdg-wghi2zc,
-.gdg-p13nj8j0 {
+.gdg-wghi2zc {
   background-color: var(--background) !important;
   color: var(--foreground) !important;
 }
@@ -22,28 +21,26 @@
   color: var(--foreground) !important;
 }
 
-.gdg-p13nj8j0 [class*="-menu"],
-.gdg-p13nj8j0 [class*="-menuList"],
-.gdg-p13nj8j0 .click-outside-ignore,
-.gdg-p13nj8j0 .click-outside-ignore > div {
+.glide-select__menu,
+.glide-select__menu-list {
   background-color: var(--popover) !important;
   color: var(--popover-foreground) !important;
 }
 
-.gdg-p13nj8j0 [class*="-menu"],
-.gdg-p13nj8j0 .click-outside-ignore > div {
+.glide-select__menu {
   border: 1px solid oklch(0.708 0 0 / 45%) !important;
   border-radius: 6px !important;
   overflow: hidden;
 }
 
-.gdg-p13nj8j0 [class*="-option"] {
+.glide-select__option {
   background-color: var(--popover) !important;
   color: var(--popover-foreground) !important;
 }
 
-.gdg-p13nj8j0 [class*="-option"]:hover,
-.gdg-p13nj8j0 [class*="-option"][aria-selected="true"] {
+.glide-select__option:hover,
+.glide-select__option--is-focused,
+.glide-select__option--is-selected {
   background-color: var(--accent) !important;
   color: var(--accent-foreground) !important;
 }

@@ -7,8 +7,10 @@ import {
   CompactSelection,
   DataEditor,
   GridCellKind,
+  TextCellEntry,
   getDefaultTheme,
   type CustomCell,
+  type CustomRenderer,
   type DataEditorRef,
   type EditableGridCell,
   type GridCell,
@@ -16,10 +18,12 @@ import {
   type GridSelection,
   type Item,
   type Theme,
+  useTheme,
 } from "@glideapps/glide-data-grid";
 import { DropdownCell, type DropdownCellType } from "@glideapps/glide-data-grid-cells";
 import { Plus, X } from "lucide-react";
 import * as React from "react";
+import Select from "react-select";
 
 import { Button } from "@/components/ui/button";
 import { useDeleteExpenses } from "@/expenses/use-delete-expenses";
@@ -200,6 +204,151 @@ function makeSelectCell(
 function isDropdownCell(cell: CustomCell): cell is DropdownCellType {
   return "kind" in cell.data && cell.data.kind === "dropdown-cell";
 }
+
+function DropdownEditor({
+  initialValue,
+  onFinishedEditing,
+  value: cell,
+}: {
+  initialValue?: string;
+  onFinishedEditing: (newValue?: DropdownCellType) => void;
+  value: DropdownCellType;
+}) {
+  const { allowedValues, value: valueIn } = cell.data;
+  const [value, setValue] = React.useState(valueIn);
+  const [inputValue, setInputValue] = React.useState(initialValue ?? "");
+  const theme = useTheme();
+
+  const values = React.useMemo(
+    () =>
+      allowedValues.map((option) => {
+        if (typeof option === "string" || option == null) {
+          return {
+            label: option?.toString() ?? "",
+            value: option ?? "",
+          };
+        }
+        return option;
+      }),
+    [allowedValues],
+  );
+
+  if (cell.readonly) {
+    return (
+      <div className="gdg-r6sia3g">
+        <TextCellEntry
+          autoFocus={false}
+          disabled
+          highlight
+          value={value ?? ""}
+          onChange={() => undefined}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="gdg-wghi2zc">
+      <Select
+        autoFocus
+        className="glide-select"
+        classNamePrefix="glide-select"
+        components={{
+          DropdownIndicator: () => null,
+          IndicatorSeparator: () => null,
+        }}
+        captureMenuScroll
+        inputValue={inputValue}
+        menuPlacement="auto"
+        menuPortalTarget={document.getElementById("portal") ?? document.body}
+        menuPosition="fixed"
+        menuShouldScrollIntoView={false}
+        maxMenuHeight={220}
+        openMenuOnFocus
+        options={values}
+        onInputChange={setInputValue}
+        styles={{
+          control: (base) => ({
+            ...base,
+            border: 0,
+            boxShadow: "none",
+          }),
+          menuPortal: (base) => ({
+            ...base,
+            zIndex: 9999,
+          }),
+          option: (base, { isFocused }) => ({
+            ...base,
+            cursor: isFocused ? "pointer" : undefined,
+            fontFamily: theme.fontFamily,
+            fontSize: theme.editorFontSize,
+            paddingLeft: theme.cellHorizontalPadding,
+            paddingRight: theme.cellHorizontalPadding,
+            ":active": {
+              ...base[":active"],
+              color: theme.accentFg,
+            },
+            ":empty::after": {
+              content: '"&nbsp;"',
+              visibility: "hidden",
+            },
+          }),
+        }}
+        theme={(selectTheme) => ({
+          ...selectTheme,
+          colors: {
+            ...selectTheme.colors,
+            neutral0: theme.bgCell,
+            neutral5: theme.bgCell,
+            neutral10: theme.bgCell,
+            neutral20: theme.bgCellMedium,
+            neutral30: theme.bgCellMedium,
+            neutral40: theme.bgCellMedium,
+            neutral50: theme.textLight,
+            neutral60: theme.textMedium,
+            neutral70: theme.textMedium,
+            neutral80: theme.textDark,
+            neutral90: theme.textDark,
+            neutral100: theme.textDark,
+            primary: theme.accentColor,
+            primary25: theme.accentLight,
+            primary50: theme.accentColor,
+            primary75: theme.accentColor,
+          },
+        })}
+        value={values.find((option) => option.value === value)}
+        onChange={async (option) => {
+          if (option === null) return;
+          setValue(option.value);
+          await new Promise((resolve) => window.requestAnimationFrame(resolve));
+          onFinishedEditing({
+            ...cell,
+            data: {
+              ...cell.data,
+              value: option.value,
+            },
+          });
+        }}
+      />
+    </div>
+  );
+}
+
+const FixedDropdownCell: CustomRenderer<DropdownCellType> = {
+  ...DropdownCell,
+  provideEditor: () => ({
+    deletedValue: (cell) => ({
+      ...cell,
+      copyData: "",
+      data: {
+        ...cell.data,
+        value: "",
+      },
+    }),
+    disablePadding: true,
+    editor: DropdownEditor,
+  }),
+};
 
 function compareValues(a: unknown, b: unknown) {
   if (a == null && b == null) return 0;
@@ -489,7 +638,7 @@ export function DataTable({ data, onAddExpense, selectOptions, onUpdateData }: D
           cellActivationBehavior="double-click"
           className="expenses-grid"
           columns={gridColumns}
-          customRenderers={[DropdownCell]}
+          customRenderers={[FixedDropdownCell]}
           fillHandle={false}
           getCellContent={getCellContent}
           getCellsForSelection
