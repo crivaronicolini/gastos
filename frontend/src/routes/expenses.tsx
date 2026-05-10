@@ -455,16 +455,10 @@ export function Expenses() {
 
     return currencies.size === 1 ? Array.from(currencies)[0] : null;
   }, [groupExpenses]);
-  const memberTables = statementOwners.map((user) => {
-    const usageTarget = usageTargets.find((target) => target.user === user.id);
-    return {
-      user,
-      usageTarget,
-      expenses: usageTarget
-        ? filteredExpenses.filter((expense) => expense.usedByTarget === usageTarget.id)
-        : [],
-    };
-  });
+  const memberTables = statementOwners.map((user) => ({
+    user,
+    expenses: filteredExpenses.filter((expense) => expense.statementOwnerId === user.id),
+  }));
 
   React.useEffect(() => {
     if (search.period === selectedPeriod) return;
@@ -581,7 +575,7 @@ export function Expenses() {
       />
 
       <div className="grid gap-6 xl:grid-cols-2">
-        {memberTables.map(({ expenses: userExpenses, usageTarget, user }) => (
+        {memberTables.map(({ expenses: userExpenses, user }) => (
           <section
             key={user.id}
             className="relative space-y-2"
@@ -631,12 +625,6 @@ export function Expenses() {
                 onUpdateData={updateExpenseData}
               />
             </div>
-
-            {!usageTarget && (
-              <p className="text-sm text-muted-foreground">
-                Missing usage target for this group member.
-              </p>
-            )}
           </section>
         ))}
       </div>
