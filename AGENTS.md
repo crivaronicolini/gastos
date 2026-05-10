@@ -1,6 +1,9 @@
 # Programming Guidelines
 
 DO NOT USE UseEffect UNLESS ABSOLUTELY NECESSARY. Rely on TanStack Query primitives.
+DO NOT USE UseEffect UNLESS ABSOLUTELY NECESSARY.
+
+Git commands require escalation.
 
 ## Database and Schemas
 
@@ -69,3 +72,11 @@ For those schemas:
 - If an LLM needs a JSON Schema, generate it from Zod with `toJSONSchema(...)`
   instead of maintaining a second schema by hand.
 - Validate parsed JSON at the boundary before inserting into the database.
+
+## UI Work
+
+- Batch small visual-only tweaks and run validation after the batch, not after
+  every one-line class change.
+- If a component already exists, first identify whether the task is to replace
+  its implementation, extend its data shape, or add a new component. State that
+  assumption briefly before editing.
