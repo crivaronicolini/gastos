@@ -42,6 +42,7 @@ export const Route = createFileRoute("/expenses")({
 
 const UPLOAD_STORAGE_KEY = "gastos:workflow-uploads";
 const SUCCESS_BADGE_TTL = 8_000;
+const TREMOR_COLORS = ["blue", "cyan", "indigo", "violet", "amber", "emerald", "rose"];
 
 type UploadResponse = {
   uploads: Array<Omit<TrackedUpload, "status">>;
@@ -51,6 +52,11 @@ type ExpenseWithStatementPeriod = Expense & {
   statementGroupId: number | null;
   statementMonth: string | null;
   statementOwnerId: number | null;
+};
+
+type ChartPeriodTotals = {
+  total: number;
+  [ownerName: string]: number;
 };
 
 async function getAllCategroies() {
@@ -433,25 +439,49 @@ export function Expenses() {
     () => groupExpenses.filter((expense) => expense.statementMonth === selectedPeriod),
     [groupExpenses, selectedPeriod],
   );
+  const chartCategories = React.useMemo(() => {
+    const ownerNames = statementOwners.map((user) => user.name);
+    const ownerIds = new Set(statementOwners.map((user) => user.id));
+    const hasUnassigned = groupExpenses.some(
+      (expense) => expense.statementOwnerId == null || !ownerIds.has(expense.statementOwnerId),
+    );
+
+    return hasUnassigned
+      ? [...ownerNames, "Unassigned"]
+      : ownerNames;
+  }, [groupExpenses, statementOwners]);
   const chartData = React.useMemo(() => {
-    const totalsByPeriod = new Map<string, number>();
+    const totalsByPeriod = new Map<string, ChartPeriodTotals>();
+    const ownerNamesById = new Map(statementOwners.map((user) => [user.id, user.name]));
 
     for (const expense of groupExpenses) {
       if (!expense.statementMonth || expense.amount == null) continue;
 
-      totalsByPeriod.set(
-        expense.statementMonth,
-        (totalsByPeriod.get(expense.statementMonth) ?? 0) + Number(expense.amount),
-      );
+      const amount = Number(expense.amount);
+      const ownerName =
+        expense.statementOwnerId == null
+          ? "Unassigned"
+          : ownerNamesById.get(expense.statementOwnerId) ?? "Unassigned";
+      const periodTotals = totalsByPeriod.get(expense.statementMonth) ?? { total: 0 };
+
+      periodTotals.total += amount;
+      periodTotals[ownerName] = (periodTotals[ownerName] ?? 0) + amount;
+      totalsByPeriod.set(expense.statementMonth, periodTotals);
     }
 
     return calendarPeriods.map((period) => ({
-      hasData: (totalsByPeriod.get(period) ?? 0) > 0,
+      ...Object.fromEntries(chartCategories.map((category) => [category, 0])),
+      ...(totalsByPeriod.get(period) ?? {}),
+      hasData: (totalsByPeriod.get(period)?.total ?? 0) > 0,
       label: formatPeriodLabel(period),
       period,
-      total: totalsByPeriod.get(period) ?? 0,
+      total: totalsByPeriod.get(period)?.total ?? 0,
     }));
-  }, [calendarPeriods, groupExpenses]);
+  }, [calendarPeriods, chartCategories, groupExpenses, statementOwners]);
+  const chartColors = React.useMemo(
+    () => chartCategories.map((_, index) => TREMOR_COLORS[index % TREMOR_COLORS.length]),
+    [chartCategories],
+  );
   const chartCurrency = React.useMemo(() => {
     const currencies = new Set(
       groupExpenses
@@ -570,6 +600,8 @@ export function Expenses() {
       </div>
 
       <ExpensePeriodChart
+        categories={chartCategories}
+        colors={chartColors}
         currency={chartCurrency}
         data={chartData}
         selectedPeriod={selectedPeriod}

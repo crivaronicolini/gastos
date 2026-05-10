@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import { BarChart } from "@tremor/react";
 
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -8,9 +8,12 @@ type ExpensePeriodDatum = {
   period: string;
   label: string;
   total: number;
+  [ownerName: string]: boolean | number | string;
 };
 
 type ExpensePeriodChartProps = {
+  categories: string[];
+  colors: string[];
   data: ExpensePeriodDatum[];
   selectedPeriod: string | null;
   onPeriodSelect: (period: string) => void;
@@ -37,15 +40,13 @@ function getCurrentPeriod() {
 }
 
 export function ExpensePeriodChart({
+  categories,
+  colors,
   data,
   selectedPeriod,
   onPeriodSelect,
   currency,
 }: ExpensePeriodChartProps) {
-  const activeIndex = React.useMemo(
-    () => data.findIndex((item) => item.period === selectedPeriod),
-    [data, selectedPeriod],
-  );
   const currentPeriod = React.useMemo(() => getCurrentPeriod(), []);
   const hasAnyExpenses = React.useMemo(() => data.some((item) => item.total > 0), [data]);
 
@@ -54,59 +55,30 @@ export function ExpensePeriodChart({
       <CardContent className={hasAnyExpenses ? "pt-6" : "py-0"}>
         {hasAnyExpenses && (
           <div className="h-28 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={data}
-                barCategoryGap={10}
-                margin={{ top: 4, right: 8, left: 8, bottom: 0 }}
-              >
-                <CartesianGrid vertical={false} stroke="var(--border)" opacity={0.35} />
-                <XAxis axisLine={false} dataKey="label" tick={false} tickLine={false} />
-                <Tooltip
-                  cursor={{ fill: "var(--muted)", opacity: 0.2 }}
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-
-                    const item = payload[0]?.payload as ExpensePeriodDatum | undefined;
-                    if (!item) return null;
-
-                    return (
-                      <div className="rounded-md border bg-background px-3 py-2 text-xs shadow-md">
-                        <div className="font-medium text-foreground">{item.label}</div>
-                        <div className="text-muted-foreground">
-                          {formatChartValue(item.total, currency)}
-                        </div>
-                      </div>
-                    );
-                  }}
-                />
-                <Bar
-                  dataKey="total"
-                  maxBarSize={28}
-                  onClick={(entry) => {
-                    if (entry?.period) onPeriodSelect(entry.period);
-                  }}
-                  radius={[8, 8, 0, 0]}
-                >
-                  {data.map((entry, index) => {
-                    const isCurrentMonth = entry.period === currentPeriod;
-                    const isFuture = entry.period > currentPeriod;
-                    const fill = isFuture
-                      ? "hsl(var(--muted-foreground) / 0.22)"
-                      : index === activeIndex || isCurrentMonth
-                        ? "hsl(var(--primary))"
-                        : entry.hasData
-                          ? "hsl(var(--foreground) / 0.72)"
-                          : "rgba(0, 0, 0, 0)";
-
-                    return <Cell key={entry.period} cursor="pointer" fill={fill} />;
-                  })}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <BarChart
+              className="h-full"
+              data={data}
+              index="label"
+              categories={categories}
+              colors={colors}
+              valueFormatter={(value) => formatChartValue(value, currency)}
+              showYAxis={false}
+              padding={{ left: 0, right: 0 }}
+              showXAxis={false}
+              showLegend={false}
+              showGridLines={false}
+              showAnimation
+              stack
+              barCategoryGap={10}
+              onValueChange={(value) => {
+                if (typeof value?.period === "string") onPeriodSelect(value.period);
+              }}
+            />
           </div>
         )}
-        <div className={`grid grid-cols-12 gap-1 ${hasAnyExpenses ? "mt-2" : ""}`}>
+        <div
+          className={`grid grid-cols-12 gap-1 ${hasAnyExpenses ? "mt-4" : ""}`}
+        >
           {data.map((entry) => {
             const isActive = entry.period === selectedPeriod;
             const isCurrentMonth = entry.period === currentPeriod;
@@ -121,7 +93,7 @@ export function ExpensePeriodChart({
               <button
                 key={entry.period}
                 type="button"
-                className="cursor-pointer text-center text-[11px]"
+                className="cursor-pointer rounded-full px-1.5 py-1 text-center text-[11px] transition-colors hover:bg-muted/70 focus-visible:bg-muted/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 style={{
                   color,
                   fontWeight: isActive || isCurrentMonth ? 700 : 500,
