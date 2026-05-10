@@ -164,7 +164,7 @@ export const categoryNames = [
   "Salidas",
   "Rappi/comida en casa",
   "Vivienda",
-  "Salud/médicos",
+  "Salud",
   "Ropa",
   "Mascotas",
   "Servicios",

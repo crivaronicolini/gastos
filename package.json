@@ -8,6 +8,8 @@
     "dev": "bun run --cwd frontend dev",
     "build": "bun run --cwd frontend build",
     "deploy": "bun run --cwd frontend deploy",
+    "test:openai": "bun scripts/test-openai.ts",
+    "test:openai-direct": "bun scripts/test-openai-direct.ts",
     "auth:generate": "better-auth generate --config ./server/auth.ts --output ./server/db/auth.schema.ts -y && bun ./scripts/fix-auth-schema.mjs",
     "db:generate": "drizzle-kit generate && bun run db:sync",
     "db:sync": "bun ./scripts/sync-d1-migrations.mjs"
