@@ -16,9 +16,13 @@ import {
   type Theme,
 } from "@glideapps/glide-data-grid";
 import { DropdownCell, type DropdownCellType } from "@glideapps/glide-data-grid-cells";
+import { X } from "lucide-react";
 import type { Expense } from "@server/db/schema";
 import * as React from "react";
 
+import { useDeleteExpenses } from "@/expenses/use-delete-expenses";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { parseAmountInput } from "./parse-amount-input.ts";
 import type { SelectCellOption } from "./select-cell.tsx";
 
@@ -319,6 +323,7 @@ export function DataTable({
 }: DataTableProps) {
   const tableId = React.useId();
   const gridRef = React.useRef<DataEditorRef>(null);
+  const deleteExpenses = useDeleteExpenses();
   const [containerRef, containerWidth] = useElementWidth();
   const [sort, setSort] = React.useState<SortState>(null);
   const [showSearch, setShowSearch] = React.useState(false);
@@ -354,12 +359,39 @@ export function DataTable({
   const effectiveRowCount = hasRows ? sortedData.length + 1 : 2;
   const rowCount = Math.max(effectiveRowCount, numRows + 1);
   const footerRow = hasRows ? sortedData.length : -1;
+  const selectedExpenseIds = React.useMemo(
+    () =>
+      selection.rows
+        .toArray()
+        .filter((rowIndex) => rowIndex >= 0 && rowIndex < sortedData.length)
+        .map((rowIndex) => sortedData[rowIndex]?.id)
+        .filter((id): id is number => id != null),
+    [selection.rows, sortedData],
+  );
 
   const onRowAppended = React.useCallback(async () => {
     await onAddExpense();
     setNumRows((prev) => prev + 1);
     return "bottom" as const;
   }, [onAddExpense]);
+
+  const onGridSelectionChange = React.useCallback(
+    (nextSelection: GridSelection) => {
+      setSelection(nextSelection);
+    },
+    [],
+  );
+
+  const clearSelection = React.useCallback(() => {
+    setSelection(EMPTY_SELECTION);
+  }, []);
+
+  const deleteSelectedExpenses = React.useCallback(async () => {
+    if (selectedExpenseIds.length === 0) return;
+
+    clearSelection();
+    await deleteExpenses.mutateAsync(selectedExpenseIds);
+  }, [clearSelection, deleteExpenses, selectedExpenseIds]);
 
   const getCellContent = React.useCallback(
     ([columnIndex, rowIndex]: Item): GridCell => {
@@ -487,7 +519,7 @@ export function DataTable({
           keybindings={{ search: false }}
           minColumnWidth={24}
           onCellEdited={onCellEdited}
-          onGridSelectionChange={setSelection}
+          onGridSelectionChange={onGridSelectionChange}
           onHeaderClicked={onHeaderClicked}
           onSearchClose={() => {
             setShowSearch(false);
@@ -519,6 +551,39 @@ export function DataTable({
           verticalBorder
           width="100%"
         />
+
+        {selectedExpenseIds.length > 0 && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center px-2">
+            <Card
+              size="sm"
+              className="pointer-events-auto w-auto border-foreground/15 bg-background/95 shadow-md"
+            >
+              <CardContent className="flex items-center gap-1.5 py-1.5">
+                <p className="text-[11px] leading-none text-foreground/85">
+                  {selectedExpenseIds.length} selected
+                </p>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  className="size-6"
+                  aria-label="Clear selection"
+                  onClick={clearSelection}
+                >
+                  <X className="size-3.5" />
+                </Button>
+                <Button
+                  size="xs"
+                  variant="destructive"
+                  className="h-6 px-2 text-[11px]"
+                  disabled={deleteExpenses.isPending}
+                  onClick={() => void deleteSelectedExpenses()}
+                >
+                  {deleteExpenses.isPending ? "Deleting..." : "Delete"}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );
