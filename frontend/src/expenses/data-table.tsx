@@ -451,6 +451,26 @@ function getGridHeight(rowCount: number) {
   return 36 + rows * 34 + 2;
 }
 
+function getSelectedRowIndexesForColumn(
+  selection: GridSelection,
+  columnIndex: number,
+  rowCount: number,
+  rowIndex: number,
+) {
+  const range = selection.current?.range;
+  if (!range) return [rowIndex];
+  if (range.width !== 1 || range.height < 1 || range.x !== columnIndex) {
+    return [rowIndex];
+  }
+  if (rowIndex < range.y || rowIndex >= range.y + range.height) {
+    return [rowIndex];
+  }
+
+  return Array.from({ length: range.height }, (_, offset) => range.y + offset).filter(
+    (nextRowIndex) => nextRowIndex >= 0 && nextRowIndex < rowCount,
+  );
+}
+
 function useElementWidth() {
   const [element, setElement] = React.useState<HTMLDivElement | null>(null);
   const [width, setWidth] = React.useState(0);
@@ -606,19 +626,30 @@ export function DataTable({ data, onAddExpense, selectOptions, onUpdateData }: D
   const onCellEdited = React.useCallback(
     ([columnIndex, rowIndex]: Item, newValue: EditableGridCell) => {
       const columnId = COLUMN_IDS[columnIndex];
-      const expense = sortedData[rowIndex];
-      if (!columnId || !expense) return;
+      if (!columnId) return;
 
-      if (newValue.kind === GridCellKind.Custom && isDropdownCell(newValue)) {
-        onUpdateData(expense.id, columnId, newValue.data.value || null);
-        return;
-      }
+      const targetRowIndexes = getSelectedRowIndexesForColumn(
+        selection,
+        columnIndex,
+        sortedData.length,
+        rowIndex,
+      );
 
-      if ("data" in newValue) {
-        onUpdateData(expense.id, columnId, newValue.data);
+      for (const targetRowIndex of targetRowIndexes) {
+        const expense = sortedData[targetRowIndex];
+        if (!expense) continue;
+
+        if (newValue.kind === GridCellKind.Custom && isDropdownCell(newValue)) {
+          onUpdateData(expense.id, columnId, newValue.data.value || null);
+          continue;
+        }
+
+        if ("data" in newValue) {
+          onUpdateData(expense.id, columnId, newValue.data);
+        }
       }
     },
-    [onUpdateData, sortedData],
+    [onUpdateData, selection, sortedData],
   );
 
   return (
@@ -655,7 +686,7 @@ export function DataTable({ data, onAddExpense, selectOptions, onUpdateData }: D
             setSearchValue("");
           }}
           onSearchValueChange={setSearchValue}
-          rangeSelect="none"
+          rangeSelect="rect"
           rowHeight={34}
           rowMarkers={{
             checkboxStyle: "square",
