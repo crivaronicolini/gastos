@@ -309,6 +309,7 @@ export function Expenses() {
       const body = new FormData();
       body.append("group_id", String(currentGroup.id));
       body.append("owner_id", String(ownerId));
+      body.append("statement_month", selectedPeriod);
       for (const file of pdfs) {
         body.append("file", file);
       }

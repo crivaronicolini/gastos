@@ -126,7 +126,7 @@ export const uploadRoute = new Hono<AppEnv>()
       return c.json({ error: "Invalid webhook payload", issues: body.error.issues }, 400);
     }
 
-    const { file_key, group_id, json_key, owner_id } = body.data;
+    const { file_key, group_id, json_key, owner_id, statement_month } = body.data;
     try {
       const db = c.get("db");
       const jsonObject = await c.env.R2.get(json_key);
@@ -168,7 +168,7 @@ export const uploadRoute = new Hono<AppEnv>()
           card: statementImport.card,
           group: groupId,
           jsonFileKey: json_key,
-          month: statementImport.month,
+          month: statement_month,
           owner: ownerId,
           periodFrom: parseStatementDate(statementImport.period_from),
           periodTo: parseStatementDate(statementImport.period_to),
@@ -239,6 +239,7 @@ export const uploadRoute = new Hono<AppEnv>()
     const value = body["file"] ?? body["files"];
     const groupId = Number(body["group_id"]);
     const ownerId = Number(body["owner_id"]);
+    const statementMonth = typeof body["statement_month"] === "string" ? body["statement_month"] : "";
 
     const files = Array.isArray(value)
       ? value.filter((item): item is File => item instanceof File)
@@ -260,6 +261,9 @@ export const uploadRoute = new Hono<AppEnv>()
     }
     if (!Number.isInteger(groupId) || groupId <= 0) {
       return c.json({ error: "A valid group_id is required" }, 400);
+    }
+    if (!/^\d{4}-\d{2}$/.test(statementMonth)) {
+      return c.json({ error: "A valid statement_month is required" }, 400);
     }
 
     const db = c.get("db");
@@ -293,6 +297,7 @@ export const uploadRoute = new Hono<AppEnv>()
               file_url: upload.key,
               group_id: groupId,
               owner_id: ownerId,
+              statement_month: statementMonth,
             },
           },
         };

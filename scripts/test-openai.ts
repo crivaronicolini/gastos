@@ -54,7 +54,7 @@ async function main() {
           "You are an accountant specialized in credit card statements.",
           "Return one JSON object with card, bank, and expenses.",
           "The bank field must be the bank name only, not the card brand, product name, or statement title.",
-          "The month field must use YYYY-MM format, for example 2026-05.",
+          "Use DD-MM-YY format for expense dates, period_from, and period_to. Example: 08-04-26.",
           "Do not repeat card or bank inside expense items.",
           "Each expense item must include title, date, category, amount, and currency.",
           "Use currency ARS for peso amounts and USD for dollar amounts.",

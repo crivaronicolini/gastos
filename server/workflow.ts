@@ -5,7 +5,13 @@ import { WorkflowEntrypoint, WorkflowStep } from "cloudflare:workers";
 import OpenAI from "openai";
 import { extractText, getDocumentProxy } from "unpdf";
 
-type Params = { callback_url: string; file_url: string; group_id: number; owner_id: number };
+type Params = {
+  callback_url: string;
+  file_url: string;
+  group_id: number;
+  owner_id: number;
+  statement_month: string;
+};
 
 type ChatCompletionResponse = {
   choices?: Array<{
@@ -75,7 +81,7 @@ export class ProcessFilesWorkflow extends WorkflowEntrypoint<Env, Params> {
       const { totalPages, text } = await extractText(pdf);
       const textJoined = text.join("\n\n");
       const lines = textJoined.split("\n");
-      const cutoff = lines.findIndex((line) => line.includes("TOTAL A PAGAR"));
+      const cutoff = lines.findLastIndex((line) => line.includes("TOTAL A PAGAR"));
       const statementText = cutoff === -1 ? textJoined : lines.slice(0, cutoff + 1).join("\n");
 
       await this.env.R2.put("text-" + file_url, statementText);
@@ -117,7 +123,7 @@ export class ProcessFilesWorkflow extends WorkflowEntrypoint<Env, Params> {
                 "You are an accountant specialized in credit card statements.",
                 "Return one JSON object with card, bank, and expenses.",
                 "The bank field must be the bank name only, not the card brand, product name, or statement title. Example: 'galicia', 'santander",
-                "The month field must use YYYY-MM format, for example 2026-05.",
+                "Use DD-MM-YY format for expense dates, period_from, and period_to. Example: 08-04-26.",
                 "Do not repeat card or bank inside expense items.",
                 "Each expense item must include title, date, category, amount, and currency.",
                 "Use currency ARS for peso amounts and USD for dollar amounts.",
@@ -168,6 +174,7 @@ export class ProcessFilesWorkflow extends WorkflowEntrypoint<Env, Params> {
             group_id: event.payload.group_id,
             json_key: jsonKey,
             owner_id: event.payload.owner_id,
+            statement_month: event.payload.statement_month,
           }),
         });
 
