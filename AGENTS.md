@@ -5,6 +5,20 @@ DO NOT USE UseEffect UNLESS ABSOLUTELY NECESSARY.
 
 Git commands require escalation.
 
+## Commits
+
+- Commit only stable checkpoints. Do not commit code that is knowingly broken,
+  partially migrated, or still depends on follow-up fixes in the same area.
+- Keep commits scoped to one concern when possible. Split provider/runtime
+  changes, schema/persistence changes, UI changes, and debug/logging changes
+  into separate commits unless they are tightly coupled.
+- Do not commit local debugging artifacts such as captured response payloads,
+  scratch files, or one-off logs unless the user explicitly asks for them.
+- Before committing deploy-critical changes, check the diff for accidental
+  config drift, stale fallback paths, and unused bindings.
+- Workflow code changes must be verified with a new workflow instance after
+  deploy. Do not treat retrying an old workflow instance as valid verification.
+
 ## Database and Schemas
 
 `server/db/schema.ts` is the source of truth for database tables, inferred TypeScript
