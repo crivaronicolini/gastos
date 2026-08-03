@@ -1,6 +1,5 @@
 import type { Expense } from "@server/db/schema";
 
-/* eslint-disable react-refresh/only-export-components */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import * as React from "react";

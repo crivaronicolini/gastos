@@ -1,3 +1,4 @@
+import { rmSync } from "node:fs";
 import path from "node:path";
 
 import babel from "@rolldown/plugin-babel";
@@ -21,6 +22,12 @@ export default defineConfig({
       configPath: "../wrangler.jsonc",
       persistState: { path: "../.wrangler/state" },
     }),
+    {
+      name: "remove-local-dev-vars-from-build",
+      closeBundle() {
+        rmSync(path.resolve(__dirname, "dist/gastos/.dev.vars"), { force: true });
+      },
+    },
   ],
   resolve: {
     alias: {

@@ -672,13 +672,14 @@ export function DataTable({ data, onAddExpense, selectOptions, onUpdateData }: D
           customRenderers={[FixedDropdownCell]}
           fillHandle={false}
           getCellContent={getCellContent}
-          getCellsForSelection
+          getCellsForSelection={true}
           gridSelection={selection}
           headerHeight={36}
           height={getGridHeight(rowCount)}
           keybindings={{ search: false }}
           minColumnWidth={24}
           onCellEdited={onCellEdited}
+          onPaste={true}
           onGridSelectionChange={onGridSelectionChange}
           onHeaderClicked={onHeaderClicked}
           onSearchClose={() => {
