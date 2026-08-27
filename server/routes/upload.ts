@@ -65,18 +65,14 @@ async function findGroupId(db: AppEnv["Variables"]["db"], id: number) {
   throw new Error(`Unknown group id: ${id}`);
 }
 
-async function findUsageTargetIdForUser(
-  db: AppEnv["Variables"]["db"],
-  groupId: number,
-  userId: number,
-) {
+async function findSharedUsageTargetIdForGroup(db: AppEnv["Variables"]["db"], groupId: number) {
   const [target] = await db
     .select()
     .from(usageTargets)
-    .where(and(eq(usageTargets.group, groupId), eq(usageTargets.user, userId)));
+    .where(and(eq(usageTargets.group, groupId), eq(usageTargets.type, "group")));
   if (target) return target.id;
 
-  throw new Error(`Missing usage target for user ${userId} in group ${groupId}`);
+  throw new Error(`Missing shared usage target for group ${groupId}`);
 }
 
 function chunkArray<T>(items: T[], size: number) {
@@ -130,7 +126,7 @@ export const uploadRoute = new Hono<AppEnv>()
       return c.json({ error: "Invalid webhook payload", issues: body.error.issues }, 400);
     }
 
-    const { file_key, group_id, json_key, owner_id } = body.data;
+    const { file_key, group_id, json_key, owner_id, statement_month } = body.data;
     try {
       const db = c.get("db");
       const jsonObject = await c.env.R2.get(json_key);
@@ -147,7 +143,7 @@ export const uploadRoute = new Hono<AppEnv>()
       const groupId = await findGroupId(db, group_id);
       const ownerId = await findStatementOwnerId(db, owner_id);
       await requireGroupMember(db, groupId, ownerId);
-      const ownerUsageTargetId = await findUsageTargetIdForUser(db, groupId, ownerId);
+      const sharedUsageTargetId = await findSharedUsageTargetIdForGroup(db, groupId);
 
       const [existingStatement] = await db
         .select()
@@ -172,7 +168,7 @@ export const uploadRoute = new Hono<AppEnv>()
           card: statementImport.card,
           group: groupId,
           jsonFileKey: json_key,
-          month: statementImport.month,
+          month: statement_month,
           owner: ownerId,
           periodFrom: parseStatementDate(statementImport.period_from),
           periodTo: parseStatementDate(statementImport.period_to),
@@ -193,7 +189,7 @@ export const uploadRoute = new Hono<AppEnv>()
           origin: statementImport.card ?? statementImport.bank ?? "unknown",
           statement: statement.id,
           title: expense.title ?? "Unknown expense",
-          usedByTarget: ownerUsageTargetId,
+          usedByTarget: sharedUsageTargetId,
         })),
       );
 
@@ -208,7 +204,21 @@ export const uploadRoute = new Hono<AppEnv>()
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error("Upload webhook failed", { error, file_key, json_key });
+      const issues =
+        typeof error === "object" &&
+        error != null &&
+        "issues" in error &&
+        Array.isArray((error as { issues?: unknown }).issues)
+          ? (error as { issues: unknown[] }).issues
+          : undefined;
+
+      console.error("Upload webhook failed", {
+        file_key,
+        json_key,
+        issues,
+        message,
+        name: error instanceof Error ? error.name : undefined,
+      });
       if (message.startsWith("Unknown category:")) {
         return c.json({ error: "Invalid statement JSON", message, file_key, json_key }, 422);
       }
@@ -216,7 +226,8 @@ export const uploadRoute = new Hono<AppEnv>()
         message.startsWith("Unknown statement owner id:") ||
         message.startsWith("Unknown group id:") ||
         message.includes("is not a member of group") ||
-        message.startsWith("Missing usage target")
+        message.startsWith("Missing usage target") ||
+        message.startsWith("Missing shared usage target")
       ) {
         return c.json({ error: "Invalid statement owner", message, file_key, json_key }, 422);
       }
@@ -228,6 +239,7 @@ export const uploadRoute = new Hono<AppEnv>()
     const value = body["file"] ?? body["files"];
     const groupId = Number(body["group_id"]);
     const ownerId = Number(body["owner_id"]);
+    const statementMonth = typeof body["statement_month"] === "string" ? body["statement_month"] : "";
 
     const files = Array.isArray(value)
       ? value.filter((item): item is File => item instanceof File)
@@ -250,13 +262,16 @@ export const uploadRoute = new Hono<AppEnv>()
     if (!Number.isInteger(groupId) || groupId <= 0) {
       return c.json({ error: "A valid group_id is required" }, 400);
     }
+    if (!/^\d{4}-\d{2}$/.test(statementMonth)) {
+      return c.json({ error: "A valid statement_month is required" }, 400);
+    }
 
     const db = c.get("db");
     try {
       await findGroupId(db, groupId);
       await findStatementOwnerId(db, ownerId);
       await requireGroupMember(db, groupId, ownerId);
-      await findUsageTargetIdForUser(db, groupId, ownerId);
+      await findSharedUsageTargetIdForGroup(db, groupId);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return c.json({ error: "Invalid statement owner", message }, 400);
@@ -282,6 +297,7 @@ export const uploadRoute = new Hono<AppEnv>()
               file_url: upload.key,
               group_id: groupId,
               owner_id: ownerId,
+              statement_month: statementMonth,
             },
           },
         };

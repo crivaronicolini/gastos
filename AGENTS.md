@@ -1,6 +1,23 @@
 # Programming Guidelines
 
 DO NOT USE UseEffect UNLESS ABSOLUTELY NECESSARY. Rely on TanStack Query primitives.
+DO NOT USE UseEffect UNLESS ABSOLUTELY NECESSARY.
+
+Git commands require escalation.
+
+## Commits
+
+- Commit only stable checkpoints. Do not commit code that is knowingly broken,
+  partially migrated, or still depends on follow-up fixes in the same area.
+- Keep commits scoped to one concern when possible. Split provider/runtime
+  changes, schema/persistence changes, UI changes, and debug/logging changes
+  into separate commits unless they are tightly coupled.
+- Do not commit local debugging artifacts such as captured response payloads,
+  scratch files, or one-off logs unless the user explicitly asks for them.
+- Before committing deploy-critical changes, check the diff for accidental
+  config drift, stale fallback paths, and unused bindings.
+- Workflow code changes must be verified with a new workflow instance after
+  deploy. Do not treat retrying an old workflow instance as valid verification.
 
 ## Database and Schemas
 
@@ -69,3 +86,11 @@ For those schemas:
 - If an LLM needs a JSON Schema, generate it from Zod with `toJSONSchema(...)`
   instead of maintaining a second schema by hand.
 - Validate parsed JSON at the boundary before inserting into the database.
+
+## UI Work
+
+- Batch small visual-only tweaks and run validation after the batch, not after
+  every one-line class change.
+- If a component already exists, first identify whether the task is to replace
+  its implementation, extend its data shape, or add a new component. State that
+  assumption briefly before editing.

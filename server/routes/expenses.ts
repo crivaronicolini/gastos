@@ -3,6 +3,7 @@ import type { AppEnv } from "@server/app";
 import { zValidator } from "@hono/zod-validator";
 import {
   expenses,
+  expenseCreateSchema,
   expenseInsertSchema,
   expenseUpdateSchema,
   groupMembers,
@@ -103,12 +104,49 @@ export const expenseRoute = new Hono<AppEnv>()
       .groupBy(expenses.currency);
     return c.json({ total });
   })
-  .post("/", zValidator("json", expenseInsertSchema), async (c) => {
+  .post("/", zValidator("json", expenseCreateSchema), async (c) => {
     const db = c.get("db");
     const expense = c.req.valid("json");
-    const ret = await db.insert(expenses).values(expense).returning();
+    let statementId = expense.statement;
+    let statementData: { group: number; month: string; owner: number } | null = null;
+
+    if (!statementId && expense.groupId && expense.ownerId) {
+      const month = expense.month ?? new Date().toISOString().slice(0, 7);
+      const extrasStatement = await findOrCreateExtrasStatement(
+        db,
+        expense.groupId,
+        expense.ownerId,
+        month,
+      );
+      statementId = extrasStatement.id;
+      statementData = { group: extrasStatement.group, month: extrasStatement.month, owner: extrasStatement.owner };
+    }
+
+    const ret = await db
+      .insert(expenses)
+      .values({
+        amount: expense.amount,
+        category: expense.category,
+        currency: expense.currency,
+        date: expense.date,
+        installments: expense.installments,
+        origin: expense.origin,
+        statement: statementId,
+        title: expense.title,
+        usedByTarget: expense.usedByTarget,
+      })
+      .returning();
+
+    const expenseData = ret[0];
     c.status(201);
-    return c.json(ret);
+    return c.json({
+      expense: {
+        ...expenseData,
+        statementGroupId: statementData?.group ?? null,
+        statementMonth: statementData?.month ?? null,
+        statementOwnerId: statementData?.owner ?? null,
+      },
+    });
   })
   .post(
     "/insert-relative",

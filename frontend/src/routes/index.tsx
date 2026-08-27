@@ -1,5 +1,4 @@
 import { useSession } from "@better-auth-ui/react";
-/* eslint-disable react-refresh/only-export-components */
 import { viewPaths } from "@better-auth-ui/react/core";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";

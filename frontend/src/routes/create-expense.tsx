@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 

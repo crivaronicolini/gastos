@@ -20,4 +20,18 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: ["src/routes/**/*.tsx"],
+    rules: {
+      // TanStack Router route modules must export Route alongside their components.
+      "react-refresh/only-export-components": "off",
+    },
+  },
+  {
+    files: ["src/components/ui/{badge,button,tabs}.tsx"],
+    rules: {
+      // These shadcn components expose reusable variant definitions with the component.
+      "react-refresh/only-export-components": "off",
+    },
+  },
 ]);

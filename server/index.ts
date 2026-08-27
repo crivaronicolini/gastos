@@ -6,3 +6,4 @@ export default {
 };
 
 export { ProcessFilesWorkflow };
+export { ChatAgent } from "./routes/chat";

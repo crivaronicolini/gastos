@@ -72,8 +72,17 @@ export const expenseUpdateSchema = createUpdateSchema(expenses, {
   currency: z.enum(["ARS", "USD"]).optional(),
   date: z.coerce.date().optional().nullable(),
 });
+export const expenseCreateSchema = expenseInsertSchema.extend({
+  groupId: z.number().int().positive().optional(),
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(),
+  ownerId: z.number().int().positive().optional(),
+});
 
 export type Expense = z.infer<typeof expenseSelectSchema>;
+export type ExpenseCreate = z.infer<typeof expenseCreateSchema>;
 export type ExpenseInsert = z.infer<typeof expenseInsertSchema>;
 export type ExpenseUpdate = z.infer<typeof expenseUpdateSchema>;
 
@@ -155,7 +164,7 @@ export const categoryNames = [
   "Salidas",
   "Rappi/comida en casa",
   "Vivienda",
-  "Salud/médicos",
+  "Salud",
   "Ropa",
   "Mascotas",
   "Servicios",
@@ -166,6 +175,8 @@ export const categoryNames = [
   "Otros",
 ] as const;
 
+const statementDateStringSchema = z.string().regex(/^\d{2}-\d{2}-\d{2}$/);
+
 export const statementImportExpenseSchema = expenseInsertSchema
   .pick({
     currency: true,
@@ -174,7 +185,7 @@ export const statementImportExpenseSchema = expenseInsertSchema
   .extend({
     amount: z.number(),
     category: z.enum(categoryNames),
-    date: z.string().nullable(),
+    date: statementDateStringSchema.nullable(),
     installments: z.string().nullable(),
   })
   .strict();
@@ -184,9 +195,8 @@ export const statementImportSchema = z
     bank: statementInsertSchema.shape.bank.unwrap(),
     card: statementInsertSchema.shape.card.unwrap(),
     expenses: z.array(statementImportExpenseSchema),
-    month: statementInsertSchema.shape.month.unwrap(),
-    period_from: z.string().nullable(),
-    period_to: z.string().nullable(),
+    period_from: statementDateStringSchema.nullable(),
+    period_to: statementDateStringSchema.nullable(),
   })
   .strict();
 
@@ -196,6 +206,7 @@ export const uploadWebhookSchema = z
     group_id: z.number().int().positive(),
     json_key: z.string().min(1),
     owner_id: z.number().int().positive(),
+    statement_month: z.string().regex(/^\d{4}-\d{2}$/),
   })
   .strict();
 

@@ -1,11 +1,9 @@
 import type { Expense } from "@server/db/schema";
 
-/* eslint-disable react-refresh/only-export-components */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import * as React from "react";
 
-import { columns } from "@/expenses/columns";
 import { DataTable } from "@/expenses/data-table";
 import { EditableGroupTitle } from "@/expenses/editable-group-title";
 import { ExpensePeriodChart } from "@/expenses/expense-period-chart";
@@ -16,8 +14,6 @@ import {
   type TrackedUpload,
   type WorkflowStatusResponse,
 } from "@/expenses/upload-tracking";
-import { useDeleteExpenses } from "@/expenses/use-delete-expenses";
-import { useInsertRelativeExpense } from "@/expenses/use-insert-relative-expense";
 import { useUpdateExpense } from "@/expenses/use-update-expense";
 import { api } from "@/lib/api";
 import authClient from "@/lib/auth-client";
@@ -45,15 +41,26 @@ export const Route = createFileRoute("/expenses")({
 
 const UPLOAD_STORAGE_KEY = "gastos:workflow-uploads";
 const SUCCESS_BADGE_TTL = 8_000;
+const TREMOR_COLORS = ["blue", "cyan", "indigo", "violet", "amber", "emerald", "rose"];
+const MAX_UPLOAD_BYTES = 95 * 1024 * 1024;
 
 type UploadResponse = {
   uploads: Array<Omit<TrackedUpload, "status">>;
+};
+
+type UploadMutationContext = {
+  optimisticUploads: TrackedUpload[];
 };
 
 type ExpenseWithStatementPeriod = Expense & {
   statementGroupId: number | null;
   statementMonth: string | null;
   statementOwnerId: number | null;
+};
+
+type ChartPeriodTotals = {
+  total: number;
+  [ownerName: string]: number;
 };
 
 async function getAllCategroies() {
@@ -89,6 +96,34 @@ function formatPeriodLabel(period: string, month: "short" | "long" = "short") {
     timeZone: "UTC",
     year: "numeric",
   }).format(new Date(`${period}-01T00:00:00Z`));
+}
+
+async function readErrorMessage(res: Response) {
+  const fallback = `Upload failed with HTTP ${res.status}`;
+
+  try {
+    const payload = (await res.json()) as { error?: unknown; message?: unknown };
+    if (typeof payload.message === "string") return payload.message;
+    if (typeof payload.error === "string") return payload.error;
+  } catch {
+    // Keep the status-based fallback when the response is not JSON.
+  }
+
+  return fallback;
+}
+
+function isPdfFile(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function removeOptimisticUploads(
+  uploads: TrackedUpload[],
+  optimisticUploads: TrackedUpload[] | undefined,
+) {
+  if (!optimisticUploads?.length) return uploads;
+
+  const optimisticIds = new Set(optimisticUploads.map((upload) => upload.workflowId));
+  return uploads.filter((upload) => !optimisticIds.has(upload.workflowId));
 }
 
 function getCurrentPeriod() {
@@ -197,7 +232,10 @@ export function Expenses() {
   const trackedUploads = trackedUploadsQuery.data;
   const groups = groupsQuery.data?.groups ?? [];
   const currentGroup = groups[0] ?? null;
-  const statementOwners = currentGroup?.members.map((member) => member.user) ?? [];
+  const statementOwners = React.useMemo(
+    () => currentGroup?.members.map((member) => member.user) ?? [],
+    [currentGroup?.members],
+  );
   const usageTargets = currentGroup?.usageTargets ?? [];
 
   const trackedWorkflowIds = trackedUploads
@@ -254,13 +292,23 @@ export function Expenses() {
         throw new Error("Missing group");
       }
 
-      const pdfs = Array.from(files).filter(
-        (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
-      );
+      const pdfs = Array.from(files).filter(isPdfFile);
+
+      if (pdfs.length === 0) {
+        throw new Error("Drop at least one PDF file.");
+      }
+
+      const oversized = pdfs.find((file) => file.size > MAX_UPLOAD_BYTES);
+      if (oversized) {
+        throw new Error(
+          `${oversized.name} is too large. Upload PDFs smaller than 95 MB through this page.`,
+        );
+      }
 
       const body = new FormData();
       body.append("group_id", String(currentGroup.id));
       body.append("owner_id", String(ownerId));
+      body.append("statement_month", selectedPeriod);
       for (const file of pdfs) {
         body.append("file", file);
       }
@@ -270,25 +318,25 @@ export function Expenses() {
         body,
       });
 
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res));
+      }
+
       return (await res.json()) as UploadResponse;
     },
-    onMutate: async ({ files, ownerId }) => {
-      if (!currentGroup) return { optimisticWorkflowIds: [] };
+    onMutate: ({ files, ownerId }) => {
+      if (!currentGroup) return { optimisticUploads: [] };
 
-      const optimisticUploads = Array.from(files)
-        .filter(
-          (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
-        )
-        .map((file) => ({
-          completedAt: undefined,
-          error: null,
-          fileKey: `optimistic:${file.name}`,
-          fileName: file.name,
-          groupId: currentGroup.id,
-          ownerId,
-          status: "queued" as const,
-          workflowId: `optimistic:${crypto.randomUUID()}`,
-        }));
+      const optimisticUploads = Array.from(files).filter(isPdfFile).map((file) => ({
+        completedAt: undefined,
+        error: null,
+        fileKey: `optimistic:${file.name}`,
+        fileName: file.name,
+        groupId: currentGroup.id,
+        ownerId,
+        status: "queued" as const,
+        workflowId: `optimistic:${crypto.randomUUID()}`,
+      }));
 
       queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) => [
         ...current,
@@ -296,22 +344,28 @@ export function Expenses() {
       ]);
 
       return {
-        optimisticWorkflowIds: optimisticUploads.map((upload) => upload.workflowId),
+        optimisticUploads,
       };
     },
-    onSuccess: (payload, _variables, context) => {
+    onSuccess: (payload, _variables, context: UploadMutationContext | undefined) => {
       queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) => [
-        ...current.filter((upload) => !context?.optimisticWorkflowIds.includes(upload.workflowId)),
+        ...removeOptimisticUploads(current, context?.optimisticUploads),
         ...payload.uploads.map((upload) => ({
           ...upload,
           status: "queued" as const,
         })),
       ]);
     },
-    onError: (_error, _variables, context) => {
-      queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) =>
-        current.filter((upload) => !context?.optimisticWorkflowIds.includes(upload.workflowId)),
-      );
+    onError: (error, _variables, context: UploadMutationContext | undefined) => {
+      const message = error instanceof Error ? error.message : String(error);
+      queryClient.setQueryData<TrackedUpload[]>(["tracked-uploads"], (current = []) => [
+        ...removeOptimisticUploads(current, context?.optimisticUploads),
+        ...(context?.optimisticUploads.map((upload) => ({
+          ...upload,
+          error: { message, name: "UploadError" },
+          status: "errored" as const,
+        })) ?? []),
+      ]);
     },
   });
 
@@ -370,9 +424,53 @@ export function Expenses() {
     },
   });
 
-  const deleteExpenses = useDeleteExpenses();
-  const insertRelativeExpense = useInsertRelativeExpense();
   const updateExpense = useUpdateExpense();
+
+  const addExpenseMutation = useMutation({
+    mutationFn: async ({ ownerId }: { ownerId: number }) => {
+      if (!currentGroup) {
+        throw new Error("Missing group");
+      }
+
+      const res = await api.expenses.$post({
+        json: {
+          groupId: currentGroup.id,
+          month: selectedPeriod,
+          ownerId,
+          title: "",
+          amount: 0,
+          currency: "ARS",
+          date: new Date().toISOString().split("T")[0],
+          origin: "extras",
+          statement: null,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to create expense");
+      }
+
+      const data = await res.json();
+      return data;
+    },
+    onSuccess: ({ expense }) => {
+      queryClient.setQueryData<{ expenses: ExpenseWithStatementPeriod[] }>(
+        ["get-all-expenses"],
+        (current) => {
+          if (!current) return { expenses: [expense as ExpenseWithStatementPeriod] };
+          return {
+            expenses: [...current.expenses, expense as ExpenseWithStatementPeriod],
+          };
+        },
+      );
+    },
+  });
+
+  async function addExpense(ownerId: number) {
+    if (!currentGroup) return;
+    await addExpenseMutation.mutateAsync({ ownerId });
+  }
+
   const currentPeriod = React.useMemo(() => getCurrentPeriod(), []);
   const expenses = React.useMemo(
     () =>
@@ -392,25 +490,49 @@ export function Expenses() {
     () => groupExpenses.filter((expense) => expense.statementMonth === selectedPeriod),
     [groupExpenses, selectedPeriod],
   );
+  const chartCategories = React.useMemo(() => {
+    const ownerNames = statementOwners.map((user) => user.name);
+    const ownerIds = new Set(statementOwners.map((user) => user.id));
+    const hasUnassigned = groupExpenses.some(
+      (expense) => expense.statementOwnerId == null || !ownerIds.has(expense.statementOwnerId),
+    );
+
+    return hasUnassigned
+      ? [...ownerNames, "Unassigned"]
+      : ownerNames;
+  }, [groupExpenses, statementOwners]);
   const chartData = React.useMemo(() => {
-    const totalsByPeriod = new Map<string, number>();
+    const totalsByPeriod = new Map<string, ChartPeriodTotals>();
+    const ownerNamesById = new Map(statementOwners.map((user) => [user.id, user.name]));
 
     for (const expense of groupExpenses) {
       if (!expense.statementMonth || expense.amount == null) continue;
 
-      totalsByPeriod.set(
-        expense.statementMonth,
-        (totalsByPeriod.get(expense.statementMonth) ?? 0) + Number(expense.amount),
-      );
+      const amount = Number(expense.amount);
+      const ownerName =
+        expense.statementOwnerId == null
+          ? "Unassigned"
+          : ownerNamesById.get(expense.statementOwnerId) ?? "Unassigned";
+      const periodTotals = totalsByPeriod.get(expense.statementMonth) ?? { total: 0 };
+
+      periodTotals.total += amount;
+      periodTotals[ownerName] = (periodTotals[ownerName] ?? 0) + amount;
+      totalsByPeriod.set(expense.statementMonth, periodTotals);
     }
 
     return calendarPeriods.map((period) => ({
-      hasData: (totalsByPeriod.get(period) ?? 0) > 0,
+      ...Object.fromEntries(chartCategories.map((category) => [category, 0])),
+      ...(totalsByPeriod.get(period) ?? {}),
+      hasData: (totalsByPeriod.get(period)?.total ?? 0) > 0,
       label: formatPeriodLabel(period),
       period,
-      total: totalsByPeriod.get(period) ?? 0,
+      total: totalsByPeriod.get(period)?.total ?? 0,
     }));
-  }, [calendarPeriods, groupExpenses]);
+  }, [calendarPeriods, chartCategories, groupExpenses, statementOwners]);
+  const chartColors = React.useMemo(
+    () => chartCategories.map((_, index) => TREMOR_COLORS[index % TREMOR_COLORS.length]),
+    [chartCategories],
+  );
   const chartCurrency = React.useMemo(() => {
     const currencies = new Set(
       groupExpenses
@@ -420,16 +542,10 @@ export function Expenses() {
 
     return currencies.size === 1 ? Array.from(currencies)[0] : null;
   }, [groupExpenses]);
-  const memberTables = statementOwners.map((user) => {
-    const usageTarget = usageTargets.find((target) => target.user === user.id);
-    return {
-      user,
-      usageTarget,
-      expenses: usageTarget
-        ? filteredExpenses.filter((expense) => expense.usedByTarget === usageTarget.id)
-        : [],
-    };
-  });
+  const memberTables = statementOwners.map((user) => ({
+    user,
+    expenses: filteredExpenses.filter((expense) => expense.statementOwnerId === user.id),
+  }));
 
   React.useEffect(() => {
     if (search.period === selectedPeriod) return;
@@ -469,15 +585,15 @@ export function Expenses() {
     return Array.from(event.dataTransfer.types).some((type) => type.toLowerCase() === "files");
   }
 
-  async function uploadFiles(files: FileList | File[], ownerId: number) {
+  function uploadFiles(files: FileList | File[], ownerId: number) {
     if (!currentGroup) return;
-    await uploadMutation.mutateAsync({ files, ownerId });
+    uploadMutation.mutate({ files, ownerId });
   }
 
   function onDrop(event: React.DragEvent<HTMLElement>, ownerId: number) {
     event.preventDefault();
     setDraggingOwnerId(null);
-    void uploadFiles(event.dataTransfer.files, ownerId);
+    uploadFiles(event.dataTransfer.files, ownerId);
   }
 
   async function retryUploads(uploads: TrackedUpload[]) {
@@ -520,25 +636,6 @@ export function Expenses() {
     });
   }
 
-  async function deleteSelectedExpenses(expenseIds: number[]) {
-    await deleteExpenses.mutateAsync(expenseIds);
-  }
-
-  async function addRelativeExpense(
-    anchorExpenseId: number,
-    ownerId: number,
-    position: "above" | "below",
-  ) {
-    if (!currentGroup) return;
-
-    await insertRelativeExpense.mutateAsync({
-      anchorExpenseId,
-      groupId: currentGroup.id,
-      ownerId,
-      position,
-    });
-  }
-
   if (error) return "An error has ocurred: " + error.message;
 
   const groupTitle = getGroupDisplayName(currentGroup);
@@ -554,6 +651,8 @@ export function Expenses() {
       </div>
 
       <ExpensePeriodChart
+        categories={chartCategories}
+        colors={chartColors}
         currency={chartCurrency}
         data={chartData}
         selectedPeriod={selectedPeriod}
@@ -565,7 +664,7 @@ export function Expenses() {
       />
 
       <div className="grid gap-6 xl:grid-cols-2">
-        {memberTables.map(({ expenses: userExpenses, usageTarget, user }) => (
+        {memberTables.map(({ expenses: userExpenses, user }) => (
           <section
             key={user.id}
             className="relative space-y-2"
@@ -606,13 +705,8 @@ export function Expenses() {
                 </div>
               )}
               <DataTable
-                columns={columns}
                 data={userExpenses}
-                isDeletingExpenses={deleteExpenses.isPending}
-                onInsertRelativeExpense={(anchorExpenseId, position) =>
-                  addRelativeExpense(anchorExpenseId, user.id, position)
-                }
-                onDeleteExpenses={deleteSelectedExpenses}
+                onAddExpense={() => addExpense(user.id)}
                 selectOptions={{
                   category: categoriesQuery.data?.categories ?? [],
                   usedByTarget: usageTargets,
@@ -620,12 +714,6 @@ export function Expenses() {
                 onUpdateData={updateExpenseData}
               />
             </div>
-
-            {!usageTarget && (
-              <p className="text-sm text-muted-foreground">
-                Missing usage target for this group member.
-              </p>
-            )}
           </section>
         ))}
       </div>

@@ -6,6 +6,7 @@ import { logger } from "hono/logger";
 import { createAuth, type AuthEnv } from "./auth";
 import { createDb, type Db } from "./db";
 import { categoriesRoute } from "./routes/categories.ts";
+import { chatRoute } from "./routes/chat.ts";
 import { expenseRoute } from "./routes/expenses.ts";
 import { groupsRoute } from "./routes/groups.ts";
 import { uploadRoute } from "./routes/upload.ts";
@@ -78,6 +79,8 @@ app.use("/api/*", async (c, next) => {
   c.set("db", createDb(c.env.DB));
   await next();
 });
+
+app.route("/agents", chatRoute);
 
 const apiRoutes = app
   .basePath("/api")
