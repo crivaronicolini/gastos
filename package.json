@@ -16,7 +16,11 @@
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.6.9",
+    "@cloudflare/ai-chat": "^0.11.0",
     "@hono/zod-validator": "^0.7.6",
+    "@openrouter/ai-sdk-provider": "^3.0.0",
+    "agents": "^0.22.0",
+    "ai": "^7.0.83",
     "better-auth": "^1.6.9",
     "better-auth-cloudflare": "^0.3.0",
     "drizzle-orm": "^1.0.0-beta.21",

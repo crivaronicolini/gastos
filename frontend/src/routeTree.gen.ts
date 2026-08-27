@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as CreateExpenseRouteImport } from './routes/create-expense'
+import { Route as ChatRouteImport } from './routes/chat'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsPathRouteImport } from './routes/settings/$path'
 import { Route as AuthPathRouteImport } from './routes/auth/$path'
@@ -23,6 +24,11 @@ const ExpensesRoute = ExpensesRouteImport.update({
 const CreateExpenseRoute = CreateExpenseRouteImport.update({
   id: '/create-expense',
   path: '/create-expense',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChatRoute = ChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -43,6 +49,7 @@ const AuthPathRoute = AuthPathRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/chat': typeof ChatRoute
   '/create-expense': typeof CreateExpenseRoute
   '/expenses': typeof ExpensesRoute
   '/auth/$path': typeof AuthPathRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/chat': typeof ChatRoute
   '/create-expense': typeof CreateExpenseRoute
   '/expenses': typeof ExpensesRoute
   '/auth/$path': typeof AuthPathRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/chat': typeof ChatRoute
   '/create-expense': typeof CreateExpenseRoute
   '/expenses': typeof ExpensesRoute
   '/auth/$path': typeof AuthPathRoute
@@ -67,15 +76,23 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/chat'
     | '/create-expense'
     | '/expenses'
     | '/auth/$path'
     | '/settings/$path'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/create-expense' | '/expenses' | '/auth/$path' | '/settings/$path'
+  to:
+    | '/'
+    | '/chat'
+    | '/create-expense'
+    | '/expenses'
+    | '/auth/$path'
+    | '/settings/$path'
   id:
     | '__root__'
     | '/'
+    | '/chat'
     | '/create-expense'
     | '/expenses'
     | '/auth/$path'
@@ -84,6 +101,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ChatRoute: typeof ChatRoute
   CreateExpenseRoute: typeof CreateExpenseRoute
   ExpensesRoute: typeof ExpensesRoute
   AuthPathRoute: typeof AuthPathRoute
@@ -104,6 +122,13 @@ declare module '@tanstack/react-router' {
       path: '/create-expense'
       fullPath: '/create-expense'
       preLoaderRoute: typeof CreateExpenseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -132,6 +157,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ChatRoute: ChatRoute,
   CreateExpenseRoute: CreateExpenseRoute,
   ExpensesRoute: ExpensesRoute,
   AuthPathRoute: AuthPathRoute,

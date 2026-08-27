@@ -52,6 +52,14 @@ function AppShell() {
         >
           Expenses
         </Link>
+        <Link
+          to="/chat"
+          activeProps={{
+            className: "font-bold",
+          }}
+        >
+          Chat
+        </Link>
       </nav>
       <div className="justify-self-end">
         <UserButton size="icon" />
